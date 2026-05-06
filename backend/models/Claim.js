@@ -10,6 +10,7 @@ const claimSchema = new mongoose.Schema({
   },
   proofDescription: { type: String },
   proofImageUrl: { type: String },
+  rejectionReason: { type: String },
   reviewedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
   reviewedAt: { type: Date, default: null }
 }, { timestamps: true });

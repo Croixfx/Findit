@@ -10,7 +10,8 @@ const institutionSchema = new mongoose.Schema({
   address: { type: String },
   email: { type: String },
   phone: { type: String },
-  logoUrl: { type: String }
+  logoUrl: { type: String },
+  status: { type: String, enum: ['active', 'suspended'], default: 'active' }
 }, { timestamps: true });
 
 module.exports = mongoose.model('Institution', institutionSchema);

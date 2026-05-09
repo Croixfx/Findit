@@ -6,7 +6,15 @@ const verifyToken = require('../middleware/auth');
 // POST /api/v1/auth/register
 router.post('/register', async (req, res) => {
   try {
-    const { firebase_uid, email, full_name, role, institution_id } = req.body;
+    const {
+      firebase_uid,
+      email,
+      full_name,
+      fullName,
+      role,
+      institution_id,
+      institutionId
+    } = req.body;
 
     if (!firebase_uid || !email || !role) {
       return res.status(400).json({ error: 'firebase_uid, email, and role are required' });
@@ -25,9 +33,9 @@ router.post('/register', async (req, res) => {
     user = await User.create({
       firebaseUid: firebase_uid,
       email,
-      fullName: full_name || email.split('@')[0],
+      fullName: full_name || fullName || email.split('@')[0],
       role,
-      institution: institution_id || null
+      institution: institution_id || institutionId || null
     });
 
     res.status(201).json(user);

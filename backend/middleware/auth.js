@@ -13,15 +13,9 @@ async function verifyToken(req, res, next) {
   try {
     const decoded = await admin.auth().verifyIdToken(token);
 
-    let user = await User.findOne({ firebaseUid: decoded.uid });
-
+    const user = await User.findOne({ firebaseUid: decoded.uid });
     if (!user) {
-      user = await User.create({
-        firebaseUid: decoded.uid,
-        email: decoded.email,
-        fullName: decoded.name || decoded.email.split('@')[0],
-        role: 'owner'
-      });
+      return res.status(404).json({ error: 'User profile not found. Please complete registration.' });
     }
 
     req.user = user;

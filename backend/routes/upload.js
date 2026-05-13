@@ -16,7 +16,9 @@ router.post('/', verifyToken, upload.single('file'), async (req, res) => {
     const filename = `${folder}/${Date.now()}.${ext}`;
 
     const downloadToken = crypto.randomUUID();
-    const bucket = admin.storage().bucket();
+    const bucketName = process.env.FIREBASE_STORAGE_BUCKET || 'findit-d6af0.firebasestorage.app';
+    console.log('[upload] using bucket:', bucketName);
+    const bucket = admin.storage().bucket(bucketName);
     const fileRef = bucket.file(filename);
 
     await fileRef.save(req.file.buffer, {

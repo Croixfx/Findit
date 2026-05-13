@@ -55,11 +55,34 @@ router.post('/', verifyToken, async (req, res) => {
   }
 });
 
+// GET /api/v1/items/mine — staff: all items for their institution (all statuses)
+router.get('/mine', verifyToken, async (req, res) => {
+  try {
+    if (req.user.role !== 'staff') {
+      return res.status(403).json({ error: 'Staff only' });
+    }
+    if (!req.user.institution) {
+      return res.json([]);
+    }
+    const items = await Item.find({ institution: req.user.institution })
+      .populate('institution', 'name type')
+      .populate('loggedBy', 'fullName')
+      .sort({ createdAt: -1 });
+    res.json(items);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // GET /api/v1/items — public, available items with filters
 router.get('/', async (req, res) => {
   try {
-    const { category, keyword, dateFrom, dateTo } = req.query;
+    const { category, keyword, dateFrom, dateTo, institution } = req.query;
     const filter = { status: 'available' };
+
+    if (institution) {
+      filter.institution = institution;
+    }
 
     if (category) {
       filter.category = category;
@@ -79,10 +102,35 @@ router.get('/', async (req, res) => {
     }
 
     const items = await Item.find(filter)
-      .populate('institution', 'name')
+      .populate('institution', 'name type')
       .sort({ createdAt: -1 });
 
     res.json(items);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// PATCH /api/v1/items/:id — staff: update item for their institution
+router.patch('/:id', verifyToken, async (req, res) => {
+  try {
+    if (req.user.role !== 'staff') {
+      return res.status(403).json({ error: 'Staff only' });
+    }
+    const item = await Item.findById(req.params.id);
+    if (!item) return res.status(404).json({ error: 'Item not found' });
+    if (!item.institution.equals(req.user.institution)) {
+      return res.status(403).json({ error: 'You can only update items from your institution' });
+    }
+    const allowed = ['title', 'description', 'category', 'color', 'brand',
+      'condition', 'locationFound', 'storageReference', 'status', 'photos'];
+    const payload = {};
+    for (const key of allowed) {
+      if (req.body[key] !== undefined) payload[key] = req.body[key];
+    }
+    const updated = await Item.findByIdAndUpdate(req.params.id, payload, { new: true })
+      .populate('institution', 'name type');
+    res.json(updated);
   } catch (error) {
     res.status(500).json({ error: error.message });
   }

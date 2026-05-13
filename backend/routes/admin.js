@@ -435,6 +435,81 @@ router.get('/pending', verifyToken, requireAdmin, async (req, res) => {
   }
 });
 
+// GET /api/v1/admin/items
+router.get('/items', verifyToken, requireAdmin, async (req, res) => {
+  try {
+    const { institution, status } = req.query;
+    const filter = {};
+    if (institution) filter.institution = institution;
+    if (status) filter.status = status;
+    const items = await Item.find(filter)
+      .populate('institution', 'name type')
+      .populate('loggedBy', 'fullName email')
+      .sort({ createdAt: -1 });
+    res.json(items);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// PATCH /api/v1/admin/items/:id
+router.patch('/items/:id', verifyToken, requireAdmin, async (req, res) => {
+  try {
+    const allowed = ['title', 'description', 'category', 'color', 'brand',
+      'condition', 'locationFound', 'storageReference', 'status', 'photos'];
+    const payload = {};
+    for (const key of allowed) {
+      if (req.body[key] !== undefined) payload[key] = req.body[key];
+    }
+    if (Object.keys(payload).length === 0) {
+      return res.status(400).json({ error: 'No valid fields provided' });
+    }
+    const item = await Item.findByIdAndUpdate(req.params.id, payload, { new: true })
+      .populate('institution', 'name type');
+    if (!item) return res.status(404).json({ error: 'Item not found' });
+    res.json(item);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// GET /api/v1/admin/claims
+router.get('/claims', verifyToken, requireAdmin, async (req, res) => {
+  try {
+    const { status } = req.query;
+    const filter = {};
+    if (status) filter.status = status;
+    const claims = await Claim.find(filter)
+      .populate({ path: 'item', populate: { path: 'institution', select: 'name type' } })
+      .populate('claimant', 'fullName email phone')
+      .sort({ createdAt: -1 });
+    res.json(claims);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// PATCH /api/v1/admin/claims/:id/status
+router.patch('/claims/:id/status', verifyToken, requireAdmin, async (req, res) => {
+  try {
+    const { status, rejectionReason } = req.body;
+    const validStatuses = ['submitted', 'under_review', 'approved', 'rejected', 'returned'];
+    if (!status || !validStatuses.includes(status)) {
+      return res.status(400).json({ error: `status must be one of: ${validStatuses.join(', ')}` });
+    }
+    const claim = await Claim.findById(req.params.id);
+    if (!claim) return res.status(404).json({ error: 'Claim not found' });
+    claim.status = status;
+    if (status === 'rejected' && rejectionReason) claim.rejectionReason = rejectionReason;
+    claim.reviewedBy = req.user._id;
+    claim.reviewedAt = new Date();
+    await claim.save();
+    res.json(claim);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // GET /api/v1/admin/stats
 router.get('/stats', verifyToken, requireAdmin, async (req, res) => {
   try {

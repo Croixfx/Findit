@@ -2,6 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../providers/auth_provider.dart';
 import '../../services/api_service.dart';
+import '../../models/item_model.dart';
+import '../../models/claim_model.dart';
+import '../../utils/constants.dart';
 
 class AdminDashboardScreen extends StatefulWidget {
   const AdminDashboardScreen({super.key});
@@ -26,10 +29,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
   }
 
   Future<void> _load() async {
-    setState(() {
-      _loading = true;
-      _error = null;
-    });
+    setState(() { _loading = true; _error = null; });
     try {
       final results = await Future.wait([
         _api.get('/admin/stats'),
@@ -39,9 +39,9 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
       ]);
       setState(() {
         _stats = Map<String, dynamic>.from(results[0] as Map);
-        _users = _toMapList(results[1]);
-        _staff = _toMapList(results[2]);
-        _institutions = _toMapList(results[3]);
+        _users = _toList(results[1]);
+        _staff = _toList(results[2]);
+        _institutions = _toList(results[3]);
       });
     } catch (e) {
       setState(() => _error = e.toString().replaceFirst('Exception: ', ''));
@@ -50,7 +50,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
     }
   }
 
-  List<Map<String, dynamic>> _toMapList(dynamic data) {
+  List<Map<String, dynamic>> _toList(dynamic data) {
     if (data is! List) return [];
     return data.map((e) => Map<String, dynamic>.from(e as Map)).toList();
   }
@@ -82,13 +82,11 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
     final id = user['_id'] as String? ?? '';
     if (id.isEmpty) return;
     await _run(() async {
-      await _api.post('/admin/staff/$id/approval', {
-        'action': approve ? 'approve' : 'reject',
-      });
+      await _api.post('/admin/staff/$id/approval',
+          {'action': approve ? 'approve' : 'reject'});
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(approve ? 'Institution approved' : 'Institution rejected')),
-      );
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text(approve ? 'Institution approved' : 'Institution rejected')));
       await _load();
     });
   }
@@ -127,95 +125,77 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
   }
 
   Future<void> _showCreateUserDialog() async {
-    final fullNameCtrl = TextEditingController();
+    final nameCtrl = TextEditingController();
     final emailCtrl = TextEditingController();
-    final passwordCtrl = TextEditingController();
-    bool obscurePassword = true;
+    final pwCtrl = TextEditingController();
+    bool obscure = true;
 
     final created = await showDialog<bool>(
       context: context,
       builder: (ctx) => StatefulBuilder(
-        builder: (ctx, setLocalState) => AlertDialog(
+        builder: (ctx, setSt) => AlertDialog(
           title: const Text('Add User'),
           content: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                TextField(
-                  controller: fullNameCtrl,
+            child: Column(mainAxisSize: MainAxisSize.min, children: [
+              TextField(controller: nameCtrl,
                   decoration: const InputDecoration(labelText: 'Full name'),
-                  textCapitalization: TextCapitalization.words,
-                ),
-                const SizedBox(height: 10),
-                TextField(
-                  controller: emailCtrl,
+                  textCapitalization: TextCapitalization.words),
+              const SizedBox(height: 10),
+              TextField(controller: emailCtrl,
                   decoration: const InputDecoration(labelText: 'Email'),
-                  keyboardType: TextInputType.emailAddress,
-                ),
-                const SizedBox(height: 10),
-                TextField(
-                  controller: passwordCtrl,
-                  obscureText: obscurePassword,
-                  decoration: InputDecoration(
-                    labelText: 'Temporary password',
-                    helperText: 'Min. 6 characters',
-                    suffixIcon: IconButton(
-                      icon: Icon(obscurePassword
-                          ? Icons.visibility_off
-                          : Icons.visibility),
-                      onPressed: () =>
-                          setLocalState(() => obscurePassword = !obscurePassword),
-                    ),
+                  keyboardType: TextInputType.emailAddress),
+              const SizedBox(height: 10),
+              TextField(
+                controller: pwCtrl,
+                obscureText: obscure,
+                decoration: InputDecoration(
+                  labelText: 'Temporary password',
+                  helperText: 'Min. 6 characters',
+                  suffixIcon: IconButton(
+                    icon: Icon(obscure ? Icons.visibility_off : Icons.visibility),
+                    onPressed: () => setSt(() => obscure = !obscure),
                   ),
                 ),
-                const SizedBox(height: 6),
-                const Text(
-                  'User will be created as Owner. You can promote them to Staff and assign an institution afterwards.',
-                  style: TextStyle(fontSize: 12, color: Colors.grey),
-                ),
-              ],
-            ),
+              ),
+              const SizedBox(height: 6),
+              const Text(
+                'Created as Owner. Promote to Staff and assign an institution afterwards.',
+                style: TextStyle(fontSize: 12, color: Colors.grey),
+              ),
+            ]),
           ),
           actions: [
             TextButton(
-              onPressed: () => Navigator.pop(ctx, false),
-              child: const Text('Cancel'),
-            ),
+                onPressed: () => Navigator.pop(ctx, false),
+                child: const Text('Cancel')),
             FilledButton(
               onPressed: () async {
-                final fullName = fullNameCtrl.text.trim();
-                final email = emailCtrl.text.trim();
-                final password = passwordCtrl.text;
-                if (fullName.isEmpty || email.isEmpty || password.isEmpty) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                        content: Text('Full name, email and password are required')),
-                  );
+                if (nameCtrl.text.trim().isEmpty ||
+                    emailCtrl.text.trim().isEmpty ||
+                    pwCtrl.text.isEmpty) {
+                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+                      content: Text('All fields are required')));
                   return;
                 }
-                if (password.length < 6) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                        content: Text('Password must be at least 6 characters')),
-                  );
+                if (pwCtrl.text.length < 6) {
+                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+                      content: Text('Password must be at least 6 characters')));
                   return;
                 }
                 try {
                   await _api.post('/admin/users', {
-                    'fullName': fullName,
-                    'email': email,
-                    'password': password,
+                    'fullName': nameCtrl.text.trim(),
+                    'email': emailCtrl.text.trim(),
+                    'password': pwCtrl.text,
                   });
                   if (!mounted) return;
                   Navigator.pop(ctx, true);
                 } catch (e) {
                   if (!mounted) return;
-                  final msg = e is ApiException
-                      ? e.message
-                      : e.toString().replaceFirst('Exception: ', '');
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text(msg)),
-                  );
+                  ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                      content: Text(e is ApiException
+                          ? e.message
+                          : e.toString().replaceFirst('Exception: ', ''))));
                 }
               },
               child: const Text('Create'),
@@ -224,22 +204,17 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
         ),
       ),
     );
-
-    if (created == true) {
-      await _load();
-    }
+    if (created == true) await _load();
   }
 
   Future<void> _assignInstitution(Map<String, dynamic> user) async {
     final id = user['_id'] as String? ?? '';
     if (id.isEmpty) return;
-
     String? selectedId;
-
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => StatefulBuilder(
-        builder: (ctx, setLocalState) => AlertDialog(
+        builder: (ctx, setSt) => AlertDialog(
           title: const Text('Assign Institution'),
           content: _institutions.isEmpty
               ? const Text('No institutions available.')
@@ -249,39 +224,31 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                   items: [
                     const DropdownMenuItem<String?>(
                         value: null, child: Text('No institution')),
-                    ..._institutions.map(
-                      (inst) => DropdownMenuItem<String?>(
+                    ..._institutions.map((inst) => DropdownMenuItem<String?>(
                         value: inst['_id'] as String?,
-                        child: Text(inst['name'] as String? ?? 'Unnamed'),
-                      ),
-                    ),
+                        child: Text(inst['name'] as String? ?? 'Unnamed'))),
                   ],
-                  onChanged: (v) => setLocalState(() => selectedId = v),
+                  onChanged: (v) => setSt(() => selectedId = v),
                 ),
           actions: [
             TextButton(
-              onPressed: () => Navigator.pop(ctx, false),
-              child: const Text('Cancel'),
-            ),
+                onPressed: () => Navigator.pop(ctx, false),
+                child: const Text('Cancel')),
             if (_institutions.isNotEmpty)
               FilledButton(
-                onPressed: () => Navigator.pop(ctx, true),
-                child: const Text('Assign'),
-              ),
+                  onPressed: () => Navigator.pop(ctx, true),
+                  child: const Text('Assign')),
           ],
         ),
       ),
     );
-
     if (confirmed != true || selectedId == null) return;
     await _run(() async {
-      await _api.patch('/admin/staff/$id/assign-institution', {
-        'institutionId': selectedId,
-      });
+      await _api.patch(
+          '/admin/staff/$id/assign-institution', {'institutionId': selectedId});
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Institution assigned')),
-      );
+      ScaffoldMessenger.of(context)
+          .showSnackBar(const SnackBar(content: Text('Institution assigned')));
       await _load();
     });
   }
@@ -295,7 +262,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
 
   Future<void> _deleteInstitution(String id, String name) async {
     final confirmed =
-        await _confirm('Delete institution "$name"?\nLinked staff will be unlinked.');
+        await _confirm('Delete "$name"?\nLinked staff will be unlinked.');
     if (!confirmed) return;
     await _run(() async {
       await _api.delete('/admin/institutions/$id');
@@ -322,13 +289,11 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
         content: Text(message),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancel'),
-          ),
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('Cancel')),
           FilledButton(
-            onPressed: () => Navigator.pop(context, true),
-            child: const Text('Confirm'),
-          ),
+              onPressed: () => Navigator.pop(context, true),
+              child: const Text('Confirm')),
         ],
       ),
     );
@@ -339,11 +304,12 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     return DefaultTabController(
-      length: 5,
+      length: 7,
       child: Scaffold(
         backgroundColor: cs.surface,
         appBar: AppBar(
-          title: const Text('Admin Dashboard'),
+          title: const Text('Admin Dashboard',
+              style: TextStyle(fontWeight: FontWeight.bold)),
           backgroundColor: cs.surface,
           automaticallyImplyLeading: false,
           actions: [
@@ -367,6 +333,8 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
               Tab(text: 'Staff'),
               Tab(text: 'Users'),
               Tab(text: 'Institutions'),
+              Tab(text: 'Items'),
+              Tab(text: 'Claims'),
             ],
           ),
         ),
@@ -406,6 +374,8 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                         onSetStatus: _setInstStatus,
                         onDelete: _deleteInstitution,
                       ),
+                      _AdminItemsTab(api: _api, institutions: _institutions),
+                      _AdminClaimsTab(api: _api),
                     ],
                   ),
       ),
@@ -413,7 +383,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
   }
 }
 
-// ─── Shared helpers ───────────────────────────────────────────────────────────
+// ─── Error & helpers ──────────────────────────────────────────────────────────
 
 class _ErrorView extends StatelessWidget {
   const _ErrorView({required this.error, required this.onRetry});
@@ -425,14 +395,11 @@ class _ErrorView extends StatelessWidget {
     return Center(
       child: Padding(
         padding: const EdgeInsets.all(24),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(error, textAlign: TextAlign.center),
-            const SizedBox(height: 16),
-            FilledButton(onPressed: onRetry, child: const Text('Retry')),
-          ],
-        ),
+        child: Column(mainAxisSize: MainAxisSize.min, children: [
+          Text(error, textAlign: TextAlign.center),
+          const SizedBox(height: 16),
+          FilledButton(onPressed: onRetry, child: const Text('Retry')),
+        ]),
       ),
     );
   }
@@ -443,24 +410,17 @@ Widget _statusChip(BuildContext context, String status) {
   Color fg;
   switch (status) {
     case 'active':
-      bg = Colors.green.shade100;
-      fg = Colors.green.shade800;
-      break;
+      bg = Colors.green.shade100; fg = Colors.green.shade800; break;
     case 'suspended':
-      bg = Colors.red.shade100;
-      fg = Colors.red.shade800;
-      break;
+      bg = Colors.red.shade100; fg = Colors.red.shade800; break;
     default:
-      bg = Colors.orange.shade100;
-      fg = Colors.orange.shade800;
+      bg = Colors.orange.shade100; fg = Colors.orange.shade800;
   }
   return Container(
     padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
     decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(6)),
-    child: Text(
-      status,
-      style: TextStyle(color: fg, fontSize: 11, fontWeight: FontWeight.w600),
-    ),
+    child: Text(status,
+        style: TextStyle(color: fg, fontSize: 11, fontWeight: FontWeight.w600)),
   );
 }
 
@@ -474,29 +434,28 @@ class _OverviewTab extends StatelessWidget {
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     final entries = [
-      ('Users', Icons.people_rounded, stats['users'] ?? 0),
-      ('Staff', Icons.badge_rounded, stats['staff'] ?? 0),
-      ('Institutions', Icons.business_rounded, stats['institutions'] ?? 0),
-      ('Pending', Icons.hourglass_top_rounded, stats['pendingInstitutions'] ?? 0),
-      ('Items', Icons.inventory_2_rounded, stats['items'] ?? 0),
-      ('Claims', Icons.assignment_rounded, stats['claims'] ?? 0),
+      ('Users', Icons.people_rounded, stats['users'] ?? 0, cs.primary),
+      ('Staff', Icons.badge_rounded, stats['staff'] ?? 0, Colors.teal),
+      ('Institutions', Icons.business_rounded, stats['institutions'] ?? 0, Colors.indigo),
+      ('Pending', Icons.hourglass_top_rounded, stats['pendingInstitutions'] ?? 0, Colors.orange),
+      ('Items', Icons.inventory_2_rounded, stats['items'] ?? 0, Colors.blue),
+      ('Claims', Icons.assignment_rounded, stats['claims'] ?? 0, Colors.purple),
+      ('Returned', Icons.done_all_rounded, stats['successfulReturns'] ?? 0, Colors.green),
     ];
 
     return GridView.builder(
       padding: const EdgeInsets.all(16),
       gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: 2,
-        childAspectRatio: 1.5,
-        crossAxisSpacing: 12,
-        mainAxisSpacing: 12,
+        crossAxisCount: 2, childAspectRatio: 1.4,
+        crossAxisSpacing: 12, mainAxisSpacing: 12,
       ),
       itemCount: entries.length,
       itemBuilder: (ctx, i) {
-        final (label, icon, value) = entries[i];
+        final (label, icon, value, color) = entries[i];
         return Card(
           elevation: 0,
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
+            borderRadius: BorderRadius.circular(14),
             side: BorderSide(color: cs.outlineVariant),
           ),
           child: Padding(
@@ -505,25 +464,22 @@ class _OverviewTab extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Icon(icon, color: cs.primary, size: 24),
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      '$value',
-                      style: Theme.of(ctx).textTheme.headlineSmall?.copyWith(
-                            fontWeight: FontWeight.bold,
-                          ),
-                    ),
-                    Text(
-                      label,
-                      style: Theme.of(ctx)
-                          .textTheme
-                          .bodySmall
-                          ?.copyWith(color: cs.onSurfaceVariant),
-                    ),
-                  ],
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: color.withOpacity(0.12),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Icon(icon, color: color, size: 22),
                 ),
+                Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  Text('$value',
+                      style: Theme.of(ctx).textTheme.headlineSmall?.copyWith(
+                          fontWeight: FontWeight.bold)),
+                  Text(label,
+                      style: Theme.of(ctx).textTheme.bodySmall?.copyWith(
+                          color: cs.onSurfaceVariant)),
+                ]),
               ],
             ),
           ),
@@ -537,13 +493,9 @@ class _OverviewTab extends StatelessWidget {
 
 class _ApprovalsTab extends StatelessWidget {
   const _ApprovalsTab({
-    required this.staff,
-    required this.instStatus,
-    required this.instName,
-    required this.onApprove,
-    required this.onReject,
+    required this.staff, required this.instStatus, required this.instName,
+    required this.onApprove, required this.onReject,
   });
-
   final List<Map<String, dynamic>> staff;
   final String Function(Map<String, dynamic>) instStatus;
   final String Function(Map<String, dynamic>) instName;
@@ -555,11 +507,7 @@ class _ApprovalsTab extends StatelessWidget {
     final pending = staff
         .where((u) => u['institution'] is Map && instStatus(u) == 'pending')
         .toList();
-
-    if (pending.isEmpty) {
-      return const Center(child: Text('No pending approvals.'));
-    }
-
+    if (pending.isEmpty) return const Center(child: Text('No pending approvals.'));
     return ListView.separated(
       padding: const EdgeInsets.all(12),
       itemCount: pending.length,
@@ -572,14 +520,8 @@ class _ApprovalsTab extends StatelessWidget {
           tag: instName(user),
           chip: _statusChip(ctx, instStatus(user)),
           actions: [
-            FilledButton(
-              onPressed: () => onApprove(user),
-              child: const Text('Approve'),
-            ),
-            OutlinedButton(
-              onPressed: () => onReject(user),
-              child: const Text('Reject'),
-            ),
+            FilledButton(onPressed: () => onApprove(user), child: const Text('Approve')),
+            OutlinedButton(onPressed: () => onReject(user), child: const Text('Reject')),
           ],
         );
       },
@@ -591,15 +533,11 @@ class _ApprovalsTab extends StatelessWidget {
 
 class _StaffTab extends StatelessWidget {
   const _StaffTab({
-    required this.staff,
-    required this.institutions,
-    required this.instName,
-    required this.instStatus,
-    required this.onDemote,
-    required this.onToggleSuspend,
+    required this.staff, required this.institutions,
+    required this.instName, required this.instStatus,
+    required this.onDemote, required this.onToggleSuspend,
     required this.onAssignInstitution,
   });
-
   final List<Map<String, dynamic>> staff;
   final List<Map<String, dynamic>> institutions;
   final String Function(Map<String, dynamic>) instName;
@@ -611,7 +549,6 @@ class _StaffTab extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (staff.isEmpty) return const Center(child: Text('No staff members.'));
-
     return ListView.separated(
       padding: const EdgeInsets.all(12),
       itemCount: staff.length,
@@ -620,7 +557,7 @@ class _StaffTab extends StatelessWidget {
         final user = staff[i];
         final suspended = user['suspended'] == true;
         final status = instStatus(user);
-        final hasInstitution = user['institution'] is Map;
+        final hasInst = user['institution'] is Map;
         return _ActionCard(
           title: user['fullName'] as String? ?? 'Unnamed',
           subtitle: user['email'] as String? ?? '',
@@ -630,16 +567,13 @@ class _StaffTab extends StatelessWidget {
           actions: [
             OutlinedButton(
               onPressed: () => onAssignInstitution(user),
-              child: Text(hasInstitution ? 'Change Institution' : 'Assign Institution'),
+              child: Text(hasInst ? 'Change Institution' : 'Assign Institution'),
             ),
             OutlinedButton(
               onPressed: () => onToggleSuspend(user),
               child: Text(suspended ? 'Unsuspend' : 'Suspend'),
             ),
-            TextButton(
-              onPressed: () => onDemote(user),
-              child: const Text('Demote'),
-            ),
+            TextButton(onPressed: () => onDemote(user), child: const Text('Demote')),
           ],
         );
       },
@@ -651,14 +585,10 @@ class _StaffTab extends StatelessWidget {
 
 class _UsersTab extends StatelessWidget {
   const _UsersTab({
-    required this.users,
-    required this.instName,
-    required this.onAddUser,
-    required this.onPromote,
-    required this.onToggleSuspend,
-    required this.onDelete,
+    required this.users, required this.instName,
+    required this.onAddUser, required this.onPromote,
+    required this.onToggleSuspend, required this.onDelete,
   });
-
   final List<Map<String, dynamic>> users;
   final String Function(Map<String, dynamic>) instName;
   final Future<void> Function() onAddUser;
@@ -668,26 +598,6 @@ class _UsersTab extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    if (users.isEmpty) {
-      return Center(
-        child: Padding(
-          padding: const EdgeInsets.all(20),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Text('No users.'),
-              const SizedBox(height: 12),
-              FilledButton.icon(
-                onPressed: onAddUser,
-                icon: const Icon(Icons.person_add_alt_1_rounded),
-                label: const Text('Add User'),
-              ),
-            ],
-          ),
-        ),
-      );
-    }
-
     return Column(
       children: [
         Padding(
@@ -701,42 +611,43 @@ class _UsersTab extends StatelessWidget {
             ),
           ),
         ),
-        Expanded(
-          child: ListView.separated(
-            padding: const EdgeInsets.all(12),
-            itemCount: users.length,
-            separatorBuilder: (_, __) => const SizedBox(height: 8),
-            itemBuilder: (ctx, i) {
-              final user = users[i];
-              final role = (user['role'] as String? ?? 'owner').toLowerCase();
-              final suspended = user['suspended'] == true;
-              return _ActionCard(
-                title: user['fullName'] as String? ?? 'Unnamed',
-                subtitle: user['email'] as String? ?? '',
-                tag: '${role.toUpperCase()} · ${instName(user)}',
-                badge: suspended ? _statusChip(ctx, 'suspended') : null,
-                actions: [
-                  if (role != 'staff' && role != 'admin')
+        if (users.isEmpty)
+          const Expanded(child: Center(child: Text('No users.')))
+        else
+          Expanded(
+            child: ListView.separated(
+              padding: const EdgeInsets.all(12),
+              itemCount: users.length,
+              separatorBuilder: (_, __) => const SizedBox(height: 8),
+              itemBuilder: (ctx, i) {
+                final user = users[i];
+                final role = (user['role'] as String? ?? 'owner').toLowerCase();
+                final suspended = user['suspended'] == true;
+                return _ActionCard(
+                  title: user['fullName'] as String? ?? 'Unnamed',
+                  subtitle: user['email'] as String? ?? '',
+                  tag: '${role.toUpperCase()} · ${instName(user)}',
+                  badge: suspended ? _statusChip(ctx, 'suspended') : null,
+                  actions: [
+                    if (role != 'staff' && role != 'admin')
+                      OutlinedButton(
+                          onPressed: () => onPromote(user),
+                          child: const Text('Make Staff')),
                     OutlinedButton(
-                      onPressed: () => onPromote(user),
-                      child: const Text('Make Staff'),
+                      onPressed: () => onToggleSuspend(user),
+                      child: Text(suspended ? 'Unsuspend' : 'Suspend'),
                     ),
-                  OutlinedButton(
-                    onPressed: () => onToggleSuspend(user),
-                    child: Text(suspended ? 'Unsuspend' : 'Suspend'),
-                  ),
-                  TextButton(
-                    onPressed: () => onDelete(user),
-                    style: TextButton.styleFrom(
-                      foregroundColor: Theme.of(ctx).colorScheme.error,
+                    TextButton(
+                      onPressed: () => onDelete(user),
+                      style: TextButton.styleFrom(
+                          foregroundColor: Theme.of(ctx).colorScheme.error),
+                      child: const Text('Delete'),
                     ),
-                    child: const Text('Delete'),
-                  ),
-                ],
-              );
-            },
+                  ],
+                );
+              },
+            ),
           ),
-        ),
       ],
     );
   }
@@ -750,17 +661,13 @@ class _InstitutionsTab extends StatelessWidget {
     required this.onSetStatus,
     required this.onDelete,
   });
-
   final List<Map<String, dynamic>> institutions;
   final Future<void> Function(String id, String status) onSetStatus;
   final Future<void> Function(String id, String name) onDelete;
 
   @override
   Widget build(BuildContext context) {
-    if (institutions.isEmpty) {
-      return const Center(child: Text('No institutions.'));
-    }
-
+    if (institutions.isEmpty) return const Center(child: Text('No institutions.'));
     return ListView.separated(
       padding: const EdgeInsets.all(12),
       itemCount: institutions.length,
@@ -778,24 +685,20 @@ class _InstitutionsTab extends StatelessWidget {
           actions: [
             if (status != 'active')
               FilledButton(
-                onPressed: id.isEmpty ? null : () => onSetStatus(id, 'active'),
-                child: const Text('Approve'),
-              ),
+                  onPressed: id.isEmpty ? null : () => onSetStatus(id, 'active'),
+                  child: const Text('Approve')),
             if (status != 'pending')
               OutlinedButton(
-                onPressed: id.isEmpty ? null : () => onSetStatus(id, 'pending'),
-                child: const Text('Set Pending'),
-              ),
+                  onPressed: id.isEmpty ? null : () => onSetStatus(id, 'pending'),
+                  child: const Text('Set Pending')),
             if (status != 'suspended')
               OutlinedButton(
-                onPressed: id.isEmpty ? null : () => onSetStatus(id, 'suspended'),
-                child: const Text('Suspend'),
-              ),
+                  onPressed: id.isEmpty ? null : () => onSetStatus(id, 'suspended'),
+                  child: const Text('Suspend')),
             TextButton(
               onPressed: id.isEmpty ? null : () => onDelete(id, name),
               style: TextButton.styleFrom(
-                foregroundColor: Theme.of(ctx).colorScheme.error,
-              ),
+                  foregroundColor: Theme.of(ctx).colorScheme.error),
               child: const Text('Delete'),
             ),
           ],
@@ -805,18 +708,366 @@ class _InstitutionsTab extends StatelessWidget {
   }
 }
 
-// ─── Reusable card ────────────────────────────────────────────────────────────
+// ─── Admin Items Tab ──────────────────────────────────────────────────────────
+
+class _AdminItemsTab extends StatefulWidget {
+  const _AdminItemsTab({required this.api, required this.institutions});
+  final ApiService api;
+  final List<Map<String, dynamic>> institutions;
+
+  @override
+  State<_AdminItemsTab> createState() => _AdminItemsTabState();
+}
+
+class _AdminItemsTabState extends State<_AdminItemsTab> {
+  bool _loading = true;
+  String? _error;
+  List<ItemModel> _items = [];
+  String? _instFilter;
+  String? _statusFilter;
+
+  static const _statuses = [
+    ('available', 'Available'),
+    ('claimed', 'Claimed'),
+    ('ready_for_pickup', 'Ready'),
+    ('returned', 'Returned'),
+    ('discarded', 'Discarded'),
+  ];
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    setState(() { _loading = true; _error = null; });
+    try {
+      String endpoint = '/admin/items';
+      final params = <String>[];
+      if (_instFilter != null) params.add('institution=$_instFilter');
+      if (_statusFilter != null) params.add('status=$_statusFilter');
+      if (params.isNotEmpty) endpoint += '?${params.join('&')}';
+      final data = await widget.api.get(endpoint);
+      final list = (data as List)
+          .map((e) => ItemModel.fromJson(Map<String, dynamic>.from(e as Map)))
+          .toList();
+      if (mounted) setState(() => _items = list);
+    } catch (e) {
+      if (mounted) setState(() => _error = e.toString().replaceFirst('Exception: ', ''));
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  Future<void> _updateItemStatus(ItemModel item, String newStatus) async {
+    try {
+      await widget.api.patch('/admin/items/${item.id}', {'status': newStatus});
+      _load();
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(e.toString().replaceFirst('Exception: ', ''))));
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return Column(
+      children: [
+        // Filters
+        Padding(
+          padding: const EdgeInsets.fromLTRB(12, 12, 12, 0),
+          child: Row(
+            children: [
+              Expanded(
+                child: DropdownButtonFormField<String?>(
+                  value: _instFilter,
+                  decoration: InputDecoration(
+                    labelText: 'Institution',
+                    isDense: true,
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                  ),
+                  items: [
+                    const DropdownMenuItem<String?>(value: null, child: Text('All')),
+                    ...widget.institutions.map((i) => DropdownMenuItem<String?>(
+                        value: i['_id'] as String?,
+                        child: Text(i['name'] as String? ?? ''))),
+                  ],
+                  onChanged: (v) { setState(() => _instFilter = v); _load(); },
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: DropdownButtonFormField<String?>(
+                  value: _statusFilter,
+                  decoration: InputDecoration(
+                    labelText: 'Status',
+                    isDense: true,
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                  ),
+                  items: [
+                    const DropdownMenuItem<String?>(value: null, child: Text('All')),
+                    ..._statuses.map((s) => DropdownMenuItem<String?>(
+                        value: s.$1, child: Text(s.$2))),
+                  ],
+                  onChanged: (v) { setState(() => _statusFilter = v); _load(); },
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 8),
+        Expanded(
+          child: _loading
+              ? const Center(child: CircularProgressIndicator())
+              : _error != null
+                  ? _ErrorView(error: _error!, onRetry: _load)
+                  : _items.isEmpty
+                      ? const Center(child: Text('No items found.'))
+                      : RefreshIndicator(
+                          onRefresh: _load,
+                          child: ListView.separated(
+                            padding: const EdgeInsets.all(12),
+                            itemCount: _items.length,
+                            separatorBuilder: (_, __) => const SizedBox(height: 8),
+                            itemBuilder: (ctx, i) => _AdminItemCard(
+                              item: _items[i],
+                              onStatusChange: (s) =>
+                                  _updateItemStatus(_items[i], s),
+                            ),
+                          ),
+                        ),
+        ),
+      ],
+    );
+  }
+}
+
+class _AdminItemCard extends StatelessWidget {
+  const _AdminItemCard({required this.item, required this.onStatusChange});
+  final ItemModel item;
+  final void Function(String) onStatusChange;
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return _ActionCard(
+      title: item.title,
+      subtitle: item.institutionName,
+      tag: '${item.category.isEmpty ? 'No category' : item.category} · ${fmtDate(item.createdAt)}',
+      chip: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+        decoration: BoxDecoration(
+          color: item.statusColor.withOpacity(0.12),
+          borderRadius: BorderRadius.circular(6),
+        ),
+        child: Text(item.statusLabel,
+            style: TextStyle(
+                color: item.statusColor,
+                fontSize: 11,
+                fontWeight: FontWeight.w600)),
+      ),
+      actions: _statusTargets(item.status).map((s) {
+        return OutlinedButton(
+          onPressed: () => onStatusChange(s),
+          style: OutlinedButton.styleFrom(
+            foregroundColor: _statusColor(s),
+            side: BorderSide(color: _statusColor(s)),
+          ),
+          child: Text(_statusLabel(s)),
+        );
+      }).toList(),
+    );
+  }
+
+  static List<String> _statusTargets(String current) {
+    const all = ['available', 'ready_for_pickup', 'returned', 'discarded'];
+    return all.where((s) => s != current).toList();
+  }
+
+  static String _statusLabel(String s) => s.replaceAll('_', ' ').toUpperCase();
+
+  static Color _statusColor(String s) {
+    switch (s) {
+      case 'available': return Colors.blue;
+      case 'ready_for_pickup': return Colors.teal;
+      case 'returned': return Colors.green;
+      case 'discarded': return Colors.grey;
+      default: return Colors.orange;
+    }
+  }
+}
+
+// ─── Admin Claims Tab ─────────────────────────────────────────────────────────
+
+class _AdminClaimsTab extends StatefulWidget {
+  const _AdminClaimsTab({required this.api});
+  final ApiService api;
+
+  @override
+  State<_AdminClaimsTab> createState() => _AdminClaimsTabState();
+}
+
+class _AdminClaimsTabState extends State<_AdminClaimsTab> {
+  bool _loading = true;
+  String? _error;
+  List<ClaimModel> _claims = [];
+  String? _statusFilter;
+
+  static const _statuses = [
+    ('submitted', 'Submitted'),
+    ('under_review', 'Under Review'),
+    ('approved', 'Approved'),
+    ('rejected', 'Rejected'),
+    ('returned', 'Returned'),
+  ];
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    setState(() { _loading = true; _error = null; });
+    try {
+      String endpoint = '/admin/claims';
+      if (_statusFilter != null) endpoint += '?status=$_statusFilter';
+      final data = await widget.api.get(endpoint);
+      final list = (data as List)
+          .map((e) => ClaimModel.fromJson(Map<String, dynamic>.from(e as Map)))
+          .toList();
+      if (mounted) setState(() => _claims = list);
+    } catch (e) {
+      if (mounted) setState(() => _error = e.toString().replaceFirst('Exception: ', ''));
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  Future<void> _updateClaimStatus(ClaimModel claim, String newStatus) async {
+    try {
+      await widget.api.patch('/admin/claims/${claim.id}/status', {'status': newStatus});
+      _load();
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(e.toString().replaceFirst('Exception: ', ''))));
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(12, 12, 12, 8),
+          child: DropdownButtonFormField<String?>(
+            value: _statusFilter,
+            decoration: InputDecoration(
+              labelText: 'Filter by status',
+              isDense: true,
+              border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+              contentPadding:
+                  const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            ),
+            items: [
+              const DropdownMenuItem<String?>(value: null, child: Text('All statuses')),
+              ..._statuses.map((s) =>
+                  DropdownMenuItem<String?>(value: s.$1, child: Text(s.$2))),
+            ],
+            onChanged: (v) { setState(() => _statusFilter = v); _load(); },
+          ),
+        ),
+        Expanded(
+          child: _loading
+              ? const Center(child: CircularProgressIndicator())
+              : _error != null
+                  ? _ErrorView(error: _error!, onRetry: _load)
+                  : _claims.isEmpty
+                      ? const Center(child: Text('No claims found.'))
+                      : RefreshIndicator(
+                          onRefresh: _load,
+                          child: ListView.separated(
+                            padding: const EdgeInsets.all(12),
+                            itemCount: _claims.length,
+                            separatorBuilder: (_, __) => const SizedBox(height: 8),
+                            itemBuilder: (ctx, i) => _AdminClaimCard(
+                              claim: _claims[i],
+                              onStatusChange: (s) =>
+                                  _updateClaimStatus(_claims[i], s),
+                            ),
+                          ),
+                        ),
+        ),
+      ],
+    );
+  }
+}
+
+class _AdminClaimCard extends StatelessWidget {
+  const _AdminClaimCard({required this.claim, required this.onStatusChange});
+  final ClaimModel claim;
+  final void Function(String) onStatusChange;
+
+  @override
+  Widget build(BuildContext context) {
+    return _ActionCard(
+      title: claim.claimantName ?? 'Unknown user',
+      subtitle: claim.itemTitle ?? 'Item',
+      tag: '${claim.itemInstitutionName ?? ''} · ${fmtDate(claim.createdAt)}',
+      chip: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+        decoration: BoxDecoration(
+          color: claim.statusColor.withOpacity(0.12),
+          borderRadius: BorderRadius.circular(6),
+        ),
+        child: Text(claim.statusLabel,
+            style: TextStyle(
+                color: claim.statusColor,
+                fontSize: 11,
+                fontWeight: FontWeight.w600)),
+      ),
+      actions: _nextStatuses(claim.status).map((s) {
+        return OutlinedButton(
+          onPressed: () => onStatusChange(s),
+          style: OutlinedButton.styleFrom(
+            foregroundColor: _color(s),
+            side: BorderSide(color: _color(s)),
+          ),
+          child: Text(s.replaceAll('_', ' ').toUpperCase()),
+        );
+      }).toList(),
+    );
+  }
+
+  static List<String> _nextStatuses(String current) {
+    const flow = ['submitted', 'under_review', 'approved', 'returned', 'rejected'];
+    return flow.where((s) => s != current).toList();
+  }
+
+  static Color _color(String s) {
+    switch (s) {
+      case 'approved': return Colors.teal;
+      case 'returned': return Colors.green;
+      case 'rejected': return Colors.red;
+      case 'under_review': return Colors.orange;
+      default: return Colors.blue;
+    }
+  }
+}
+
+// ─── Shared action card ───────────────────────────────────────────────────────
 
 class _ActionCard extends StatelessWidget {
   const _ActionCard({
-    required this.title,
-    required this.subtitle,
-    this.tag,
-    this.chip,
-    this.badge,
-    required this.actions,
+    required this.title, required this.subtitle,
+    this.tag, this.chip, this.badge, required this.actions,
   });
-
   final String title;
   final String subtitle;
   final String? tag;
@@ -835,94 +1086,83 @@ class _ActionCard extends StatelessWidget {
       ),
       child: Padding(
         padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Expanded(
-                  child: Text(
-                    title,
-                    style: Theme.of(context)
-                        .textTheme
-                        .titleSmall
-                        ?.copyWith(fontWeight: FontWeight.w600),
-                  ),
-                ),
-                if (badge != null) ...[const SizedBox(width: 8), badge!],
-                if (chip != null) ...[const SizedBox(width: 8), chip!],
-              ],
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Expanded(
+              child: Text(title,
+                  style: Theme.of(context)
+                      .textTheme
+                      .titleSmall
+                      ?.copyWith(fontWeight: FontWeight.w600)),
             ),
-            if (subtitle.isNotEmpty) ...[
-              const SizedBox(height: 2),
-              Text(
-                subtitle,
+            if (badge != null) ...[const SizedBox(width: 8), badge!],
+            if (chip != null) ...[const SizedBox(width: 8), chip!],
+          ]),
+          if (subtitle.isNotEmpty) ...[
+            const SizedBox(height: 2),
+            Text(subtitle,
                 style: Theme.of(context)
                     .textTheme
                     .bodySmall
-                    ?.copyWith(color: cs.onSurfaceVariant),
-              ),
-            ],
-            if (tag != null && tag!.isNotEmpty) ...[
-              const SizedBox(height: 2),
-              Text(
-                tag!,
-                style: Theme.of(context)
-                    .textTheme
-                    .bodySmall
-                    ?.copyWith(color: cs.onSurfaceVariant),
-              ),
-            ],
-            const SizedBox(height: 8),
-            const Divider(height: 1),
-            const SizedBox(height: 4),
-            Wrap(
-              spacing: 4,
-              runSpacing: 0,
-              children: actions.map(_compactify).toList(),
-            ),
+                    ?.copyWith(color: cs.onSurfaceVariant)),
           ],
-        ),
+          if (tag != null && tag!.isNotEmpty) ...[
+            const SizedBox(height: 2),
+            Text(tag!,
+                style: Theme.of(context)
+                    .textTheme
+                    .bodySmall
+                    ?.copyWith(color: cs.onSurfaceVariant)),
+          ],
+          const SizedBox(height: 8),
+          const Divider(height: 1),
+          const SizedBox(height: 4),
+          Wrap(spacing: 4, runSpacing: 0, children: actions.map(_compact).toList()),
+        ]),
       ),
     );
   }
 
-  static Widget _compactify(Widget btn) {
-    // Shrink minimum button size so they wrap cleanly on narrow screens
+  static Widget _compact(Widget btn) {
+    const style = ButtonStyle(
+      minimumSize: WidgetStatePropertyAll(Size(0, 32)),
+      padding: WidgetStatePropertyAll(EdgeInsets.symmetric(horizontal: 12)),
+      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+    );
     if (btn is FilledButton) {
       return FilledButton(
-        onPressed: btn.onPressed,
-        style: FilledButton.styleFrom(
-          minimumSize: const Size(0, 32),
-          padding: const EdgeInsets.symmetric(horizontal: 12),
-          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-        ),
-        child: btn.child!,
-      );
+          onPressed: btn.onPressed,
+          style: FilledButton.styleFrom(
+            minimumSize: const Size(0, 32),
+            padding: const EdgeInsets.symmetric(horizontal: 12),
+            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+          ),
+          child: btn.child!);
     }
     if (btn is OutlinedButton) {
       return OutlinedButton(
-        onPressed: btn.onPressed,
-        style: OutlinedButton.styleFrom(
-          minimumSize: const Size(0, 32),
-          padding: const EdgeInsets.symmetric(horizontal: 12),
-          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-        ),
-        child: btn.child!,
-      );
+          onPressed: btn.onPressed,
+          style: btn.style?.copyWith(
+            minimumSize: const WidgetStatePropertyAll(Size(0, 32)),
+            padding: const WidgetStatePropertyAll(EdgeInsets.symmetric(horizontal: 12)),
+            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+          ) ?? OutlinedButton.styleFrom(
+            minimumSize: const Size(0, 32),
+            padding: const EdgeInsets.symmetric(horizontal: 12),
+            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+          ),
+          child: btn.child!);
     }
     if (btn is TextButton) {
       return TextButton(
-        onPressed: btn.onPressed,
-        style: (btn.style ?? const ButtonStyle()).copyWith(
-          minimumSize: WidgetStateProperty.all(const Size(0, 32)),
-          padding: WidgetStateProperty.all(
-              const EdgeInsets.symmetric(horizontal: 8)),
-          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-        ),
-        child: btn.child!,
-      );
+          onPressed: btn.onPressed,
+          style: (btn.style ?? const ButtonStyle()).copyWith(
+            minimumSize: const WidgetStatePropertyAll(Size(0, 32)),
+            padding: const WidgetStatePropertyAll(
+                EdgeInsets.symmetric(horizontal: 8)),
+            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+          ),
+          child: btn.child!);
     }
     return btn;
   }

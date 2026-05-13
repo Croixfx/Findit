@@ -10,7 +10,14 @@ import 'screens/admin/admin_dashboard_screen.dart';
 import 'screens/staff/staff_home_screen.dart';
 import 'screens/staff/institution_setup_screen.dart';
 import 'screens/staff/pending_approval_screen.dart';
+import 'screens/staff/log_item_screen.dart';
+import 'screens/staff/claim_review_screen.dart';
 import 'screens/owner/owner_home_screen.dart';
+import 'screens/owner/institution_items_screen.dart';
+import 'screens/owner/item_detail_owner_screen.dart';
+import 'screens/owner/submit_claim_screen.dart';
+import 'screens/owner/claim_status_screen.dart';
+import 'screens/shared/claim_chat_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -31,8 +38,14 @@ class FindItApp extends StatelessWidget {
         title: 'FindIt',
         debugShowCheckedModeBanner: false,
         theme: ThemeData(
-          colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xFF4A90D9)),
+          colorScheme: ColorScheme.fromSeed(
+            seedColor: const Color(0xFF4A90D9),
+            brightness: Brightness.light,
+          ),
           useMaterial3: true,
+          navigationBarTheme: const NavigationBarThemeData(
+            labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
+          ),
         ),
         routes: {
           '/login': (_) => const LoginScreen(),
@@ -41,6 +54,7 @@ class FindItApp extends StatelessWidget {
           '/owner-home': (_) => const OwnerHomeScreen(),
           '/admin-dashboard': (_) => const AdminDashboardScreen(),
           '/pending-approval': (_) => const PendingApprovalScreen(),
+          '/log-item': (_) => const LogItemScreen(),
         },
         home: const _AuthGate(),
       ),
@@ -64,7 +78,7 @@ class _AuthGateState extends State<_AuthGate> {
       stream: FirebaseAuth.instance.authStateChanges(),
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
-          return const _Loading();
+          return const _LoadingScreen();
         }
 
         if (!snapshot.hasData) {
@@ -81,7 +95,7 @@ class _AuthGateState extends State<_AuthGate> {
               });
             }
 
-            if (auth.initializing) return const _Loading();
+            if (auth.initializing) return const _LoadingScreen();
 
             final role = (auth.currentUser?.role ?? '').toLowerCase();
 
@@ -89,18 +103,14 @@ class _AuthGateState extends State<_AuthGate> {
             if (role == 'owner') return const OwnerHomeScreen();
 
             if (role == 'staff') {
-              final status = (auth.institution?.status ?? '').toLowerCase();
-              final isApproved = status == 'active';
               if (auth.currentUser?.institutionId == null) {
                 return const InstitutionSetupScreen();
               }
-              if (isApproved) {
-                return const StaffHomeScreen();
-              }
+              final status = (auth.institution?.status ?? '').toLowerCase();
+              if (status == 'active') return const StaffHomeScreen();
               return const PendingApprovalScreen();
             }
 
-            // No backend record — let them register
             return const RegisterScreen();
           },
         );
@@ -109,10 +119,38 @@ class _AuthGateState extends State<_AuthGate> {
   }
 }
 
-class _Loading extends StatelessWidget {
-  const _Loading();
+class _LoadingScreen extends StatelessWidget {
+  const _LoadingScreen();
 
   @override
-  Widget build(BuildContext context) =>
-      const Scaffold(body: Center(child: CircularProgressIndicator()));
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return Scaffold(
+      body: Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 72,
+              height: 72,
+              decoration: BoxDecoration(
+                color: cs.primaryContainer,
+                borderRadius: BorderRadius.circular(20),
+              ),
+              child: Icon(Icons.search_rounded, size: 40, color: cs.primary),
+            ),
+            const SizedBox(height: 20),
+            Text('FindIt',
+                style: TextStyle(
+                    fontSize: 24,
+                    fontWeight: FontWeight.bold,
+                    color: cs.primary,
+                    letterSpacing: 1.2)),
+            const SizedBox(height: 24),
+            const CircularProgressIndicator(),
+          ],
+        ),
+      ),
+    );
+  }
 }

@@ -6,6 +6,13 @@ const userSchema = new mongoose.Schema({
   fullName: { type: String, required: true },
   phone: { type: String },
   role: { type: String, enum: ['staff', 'owner', 'admin'], required: true },
+  accountStatus: {
+    type: String,
+    enum: ['pending', 'active', 'suspended', 'rejected'],
+    default: function defaultAccountStatus() {
+      return this.role === 'staff' ? 'pending' : 'active';
+    }
+  },
   institution: { type: mongoose.Schema.Types.ObjectId, ref: 'Institution', default: null },
   profilePictureUrl: { type: String },
   fcmToken: { type: String },

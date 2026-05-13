@@ -5,6 +5,7 @@ const Item = require('../models/Item');
 const Claim = require('../models/Claim');
 const User = require('../models/User');
 const verifyToken = require('../middleware/auth');
+const firebaseAdmin = require('../config/firebase');
 
 function requireAdmin(req, res, next) {
   if (req.user.role !== 'admin') {
@@ -136,26 +137,53 @@ router.get('/users', verifyToken, requireAdmin, async (req, res) => {
 // POST /api/v1/admin/users
 router.post('/users', verifyToken, requireAdmin, async (req, res) => {
   try {
-    const { firebaseUid, email, fullName, role, phone, institutionId, suspended } = req.body;
+    const { email, fullName, password, phone } = req.body;
 
-    if (!firebaseUid || !email || !fullName || !role) {
-      return res.status(400).json({ error: 'firebaseUid, email, fullName, and role are required' });
-    }
-    if (!ALLOWED_ROLES.includes(String(role).toLowerCase())) {
-      return res.status(400).json({ error: 'invalid role value' });
+    if (!email || !fullName || !password) {
+      return res.status(400).json({ error: 'email, fullName, and password are required' });
     }
 
-    const user = await User.create({
-      firebaseUid,
-      email,
-      fullName,
-      role: String(role).toLowerCase(),
-      phone: phone || undefined,
-      institution: institutionId || null,
-      suspended: typeof suspended === 'boolean' ? suspended : false
-    });
-    const populated = await User.findById(user._id).populate('institution', 'name type status');
-    res.status(201).json(populated);
+    const existing = await User.findOne({ email });
+    if (existing) {
+      return res.status(409).json({ error: 'A user with this email already exists' });
+    }
+
+    let firebaseUser;
+    try {
+      firebaseUser = await firebaseAdmin.auth().createUser({
+        email,
+        displayName: fullName,
+        password,
+        emailVerified: false,
+      });
+    } catch (firebaseError) {
+      const code = firebaseError.code || '';
+      if (code === 'auth/email-already-exists') {
+        return res.status(409).json({ error: 'A Firebase account with this email already exists' });
+      }
+      if (code === 'auth/invalid-password') {
+        return res.status(400).json({ error: 'Password must be at least 6 characters' });
+      }
+      return res.status(500).json({ error: firebaseError.message });
+    }
+
+    try {
+      const user = await User.create({
+        firebaseUid: firebaseUser.uid,
+        email,
+        fullName,
+        role: 'owner',
+        accountStatus: 'active',
+        phone: phone || undefined,
+        institution: null,
+        suspended: false,
+      });
+      const populated = await User.findById(user._id).populate('institution', 'name type status');
+      res.status(201).json(populated);
+    } catch (dbError) {
+      await firebaseAdmin.auth().deleteUser(firebaseUser.uid).catch(() => {});
+      throw dbError;
+    }
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
@@ -224,6 +252,64 @@ router.get('/staff', verifyToken, requireAdmin, async (req, res) => {
     const staff = await User.find({ role: 'staff' })
       .populate('institution', 'name type status')
       .sort({ createdAt: -1 });
+    res.json(staff);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// PATCH /api/v1/admin/staff/:id/approve
+router.patch('/staff/:id/approve', verifyToken, requireAdmin, async (req, res) => {
+  try {
+    const staff = await User.findOneAndUpdate(
+      { _id: req.params.id, role: 'staff' },
+      { accountStatus: 'active' },
+      { new: true }
+    ).populate('institution', 'name type status');
+
+    if (!staff) return res.status(404).json({ error: 'Staff not found' });
+    res.json(staff);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// PATCH /api/v1/admin/staff/:id/reject
+router.patch('/staff/:id/reject', verifyToken, requireAdmin, async (req, res) => {
+  try {
+    const staff = await User.findOneAndUpdate(
+      { _id: req.params.id, role: 'staff' },
+      { accountStatus: 'rejected' },
+      { new: true }
+    ).populate('institution', 'name type status');
+
+    if (!staff) return res.status(404).json({ error: 'Staff not found' });
+    res.json(staff);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// PATCH /api/v1/admin/staff/:id/assign-institution
+router.patch('/staff/:id/assign-institution', verifyToken, requireAdmin, async (req, res) => {
+  try {
+    const { institutionId } = req.body;
+    if (!institutionId) {
+      return res.status(400).json({ error: 'institutionId is required' });
+    }
+
+    const institution = await Institution.findById(institutionId);
+    if (!institution) {
+      return res.status(404).json({ error: 'Institution not found' });
+    }
+
+    const staff = await User.findOneAndUpdate(
+      { _id: req.params.id, role: 'staff' },
+      { institution: institutionId },
+      { new: true }
+    ).populate('institution', 'name type status');
+
+    if (!staff) return res.status(404).json({ error: 'Staff not found' });
     res.json(staff);
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -330,6 +416,20 @@ router.post('/staff/:id/approval', verifyToken, requireAdmin, async (req, res) =
     if (!institution) return res.status(404).json({ error: 'Institution not found' });
 
     res.json({ message: `Institution ${status}`, institution });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// GET /api/v1/admin/pending
+router.get('/pending', verifyToken, requireAdmin, async (req, res) => {
+  try {
+    const [pendingStaff, pendingInstitutions] = await Promise.all([
+      User.countDocuments({ role: 'staff', accountStatus: 'pending' }),
+      Institution.countDocuments({ status: 'pending' })
+    ]);
+
+    res.json({ pendingStaff, pendingInstitutions });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }

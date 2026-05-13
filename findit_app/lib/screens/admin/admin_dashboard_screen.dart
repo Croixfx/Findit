@@ -126,6 +126,166 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
     });
   }
 
+  Future<void> _showCreateUserDialog() async {
+    final fullNameCtrl = TextEditingController();
+    final emailCtrl = TextEditingController();
+    final passwordCtrl = TextEditingController();
+    bool obscurePassword = true;
+
+    final created = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setLocalState) => AlertDialog(
+          title: const Text('Add User'),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextField(
+                  controller: fullNameCtrl,
+                  decoration: const InputDecoration(labelText: 'Full name'),
+                  textCapitalization: TextCapitalization.words,
+                ),
+                const SizedBox(height: 10),
+                TextField(
+                  controller: emailCtrl,
+                  decoration: const InputDecoration(labelText: 'Email'),
+                  keyboardType: TextInputType.emailAddress,
+                ),
+                const SizedBox(height: 10),
+                TextField(
+                  controller: passwordCtrl,
+                  obscureText: obscurePassword,
+                  decoration: InputDecoration(
+                    labelText: 'Temporary password',
+                    helperText: 'Min. 6 characters',
+                    suffixIcon: IconButton(
+                      icon: Icon(obscurePassword
+                          ? Icons.visibility_off
+                          : Icons.visibility),
+                      onPressed: () =>
+                          setLocalState(() => obscurePassword = !obscurePassword),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 6),
+                const Text(
+                  'User will be created as Owner. You can promote them to Staff and assign an institution afterwards.',
+                  style: TextStyle(fontSize: 12, color: Colors.grey),
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () async {
+                final fullName = fullNameCtrl.text.trim();
+                final email = emailCtrl.text.trim();
+                final password = passwordCtrl.text;
+                if (fullName.isEmpty || email.isEmpty || password.isEmpty) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                        content: Text('Full name, email and password are required')),
+                  );
+                  return;
+                }
+                if (password.length < 6) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                        content: Text('Password must be at least 6 characters')),
+                  );
+                  return;
+                }
+                try {
+                  await _api.post('/admin/users', {
+                    'fullName': fullName,
+                    'email': email,
+                    'password': password,
+                  });
+                  if (!mounted) return;
+                  Navigator.pop(ctx, true);
+                } catch (e) {
+                  if (!mounted) return;
+                  final msg = e is ApiException
+                      ? e.message
+                      : e.toString().replaceFirst('Exception: ', '');
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text(msg)),
+                  );
+                }
+              },
+              child: const Text('Create'),
+            ),
+          ],
+        ),
+      ),
+    );
+
+    if (created == true) {
+      await _load();
+    }
+  }
+
+  Future<void> _assignInstitution(Map<String, dynamic> user) async {
+    final id = user['_id'] as String? ?? '';
+    if (id.isEmpty) return;
+
+    String? selectedId;
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setLocalState) => AlertDialog(
+          title: const Text('Assign Institution'),
+          content: _institutions.isEmpty
+              ? const Text('No institutions available.')
+              : DropdownButtonFormField<String?>(
+                  value: selectedId,
+                  decoration: const InputDecoration(labelText: 'Institution'),
+                  items: [
+                    const DropdownMenuItem<String?>(
+                        value: null, child: Text('No institution')),
+                    ..._institutions.map(
+                      (inst) => DropdownMenuItem<String?>(
+                        value: inst['_id'] as String?,
+                        child: Text(inst['name'] as String? ?? 'Unnamed'),
+                      ),
+                    ),
+                  ],
+                  onChanged: (v) => setLocalState(() => selectedId = v),
+                ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Cancel'),
+            ),
+            if (_institutions.isNotEmpty)
+              FilledButton(
+                onPressed: () => Navigator.pop(ctx, true),
+                child: const Text('Assign'),
+              ),
+          ],
+        ),
+      ),
+    );
+
+    if (confirmed != true || selectedId == null) return;
+    await _run(() async {
+      await _api.patch('/admin/staff/$id/assign-institution', {
+        'institutionId': selectedId,
+      });
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Institution assigned')),
+      );
+      await _load();
+    });
+  }
+
   Future<void> _setInstStatus(String id, String status) async {
     await _run(() async {
       await _api.patch('/admin/institutions/$id', {'status': status});
@@ -226,14 +386,17 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                       ),
                       _StaffTab(
                         staff: _staff,
+                        institutions: _institutions,
                         instName: _instName,
                         instStatus: _instStatus,
                         onDemote: _demoteStaff,
                         onToggleSuspend: _toggleSuspend,
+                        onAssignInstitution: _assignInstitution,
                       ),
                       _UsersTab(
                         users: _users,
                         instName: _instName,
+                        onAddUser: _showCreateUserDialog,
                         onPromote: _promoteToStaff,
                         onToggleSuspend: _toggleSuspend,
                         onDelete: _deleteUser,
@@ -429,17 +592,21 @@ class _ApprovalsTab extends StatelessWidget {
 class _StaffTab extends StatelessWidget {
   const _StaffTab({
     required this.staff,
+    required this.institutions,
     required this.instName,
     required this.instStatus,
     required this.onDemote,
     required this.onToggleSuspend,
+    required this.onAssignInstitution,
   });
 
   final List<Map<String, dynamic>> staff;
+  final List<Map<String, dynamic>> institutions;
   final String Function(Map<String, dynamic>) instName;
   final String Function(Map<String, dynamic>) instStatus;
   final Future<void> Function(Map<String, dynamic>) onDemote;
   final Future<void> Function(Map<String, dynamic>) onToggleSuspend;
+  final Future<void> Function(Map<String, dynamic>) onAssignInstitution;
 
   @override
   Widget build(BuildContext context) {
@@ -453,6 +620,7 @@ class _StaffTab extends StatelessWidget {
         final user = staff[i];
         final suspended = user['suspended'] == true;
         final status = instStatus(user);
+        final hasInstitution = user['institution'] is Map;
         return _ActionCard(
           title: user['fullName'] as String? ?? 'Unnamed',
           subtitle: user['email'] as String? ?? '',
@@ -460,6 +628,10 @@ class _StaffTab extends StatelessWidget {
           chip: status.isNotEmpty ? _statusChip(ctx, status) : null,
           badge: suspended ? _statusChip(ctx, 'suspended') : null,
           actions: [
+            OutlinedButton(
+              onPressed: () => onAssignInstitution(user),
+              child: Text(hasInstitution ? 'Change Institution' : 'Assign Institution'),
+            ),
             OutlinedButton(
               onPressed: () => onToggleSuspend(user),
               child: Text(suspended ? 'Unsuspend' : 'Suspend'),
@@ -481,6 +653,7 @@ class _UsersTab extends StatelessWidget {
   const _UsersTab({
     required this.users,
     required this.instName,
+    required this.onAddUser,
     required this.onPromote,
     required this.onToggleSuspend,
     required this.onDelete,
@@ -488,47 +661,83 @@ class _UsersTab extends StatelessWidget {
 
   final List<Map<String, dynamic>> users;
   final String Function(Map<String, dynamic>) instName;
+  final Future<void> Function() onAddUser;
   final Future<void> Function(Map<String, dynamic>) onPromote;
   final Future<void> Function(Map<String, dynamic>) onToggleSuspend;
   final Future<void> Function(Map<String, dynamic>) onDelete;
 
   @override
   Widget build(BuildContext context) {
-    if (users.isEmpty) return const Center(child: Text('No users.'));
+    if (users.isEmpty) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text('No users.'),
+              const SizedBox(height: 12),
+              FilledButton.icon(
+                onPressed: onAddUser,
+                icon: const Icon(Icons.person_add_alt_1_rounded),
+                label: const Text('Add User'),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
 
-    return ListView.separated(
-      padding: const EdgeInsets.all(12),
-      itemCount: users.length,
-      separatorBuilder: (_, __) => const SizedBox(height: 8),
-      itemBuilder: (ctx, i) {
-        final user = users[i];
-        final role = (user['role'] as String? ?? 'owner').toLowerCase();
-        final suspended = user['suspended'] == true;
-        return _ActionCard(
-          title: user['fullName'] as String? ?? 'Unnamed',
-          subtitle: user['email'] as String? ?? '',
-          tag: '${role.toUpperCase()} · ${instName(user)}',
-          badge: suspended ? _statusChip(ctx, 'suspended') : null,
-          actions: [
-            if (role != 'staff' && role != 'admin')
-              OutlinedButton(
-                onPressed: () => onPromote(user),
-                child: const Text('Make Staff'),
-              ),
-            OutlinedButton(
-              onPressed: () => onToggleSuspend(user),
-              child: Text(suspended ? 'Unsuspend' : 'Suspend'),
+    return Column(
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(12, 12, 12, 0),
+          child: Align(
+            alignment: Alignment.centerRight,
+            child: FilledButton.icon(
+              onPressed: onAddUser,
+              icon: const Icon(Icons.person_add_alt_1_rounded),
+              label: const Text('Add User'),
             ),
-            TextButton(
-              onPressed: () => onDelete(user),
-              style: TextButton.styleFrom(
-                foregroundColor: Theme.of(ctx).colorScheme.error,
-              ),
-              child: const Text('Delete'),
-            ),
-          ],
-        );
-      },
+          ),
+        ),
+        Expanded(
+          child: ListView.separated(
+            padding: const EdgeInsets.all(12),
+            itemCount: users.length,
+            separatorBuilder: (_, __) => const SizedBox(height: 8),
+            itemBuilder: (ctx, i) {
+              final user = users[i];
+              final role = (user['role'] as String? ?? 'owner').toLowerCase();
+              final suspended = user['suspended'] == true;
+              return _ActionCard(
+                title: user['fullName'] as String? ?? 'Unnamed',
+                subtitle: user['email'] as String? ?? '',
+                tag: '${role.toUpperCase()} · ${instName(user)}',
+                badge: suspended ? _statusChip(ctx, 'suspended') : null,
+                actions: [
+                  if (role != 'staff' && role != 'admin')
+                    OutlinedButton(
+                      onPressed: () => onPromote(user),
+                      child: const Text('Make Staff'),
+                    ),
+                  OutlinedButton(
+                    onPressed: () => onToggleSuspend(user),
+                    child: Text(suspended ? 'Unsuspend' : 'Suspend'),
+                  ),
+                  TextButton(
+                    onPressed: () => onDelete(user),
+                    style: TextButton.styleFrom(
+                      foregroundColor: Theme.of(ctx).colorScheme.error,
+                    ),
+                    child: const Text('Delete'),
+                  ),
+                ],
+              );
+            },
+          ),
+        ),
+      ],
     );
   }
 }

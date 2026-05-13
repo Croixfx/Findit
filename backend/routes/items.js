@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const Item = require('../models/Item');
+const Institution = require('../models/Institution');
 const verifyToken = require('../middleware/auth');
 
 // POST /api/v1/items — staff only
@@ -10,6 +11,23 @@ router.post('/', verifyToken, async (req, res) => {
       return res.status(403).json({ error: 'Only staff can log items' });
     }
 
+    if (req.user.accountStatus !== 'active') {
+      return res.status(403).json({ error: 'Your staff account is not active. Please wait for admin approval.' });
+    }
+
+    if (!req.user.institution) {
+      return res.status(403).json({ error: 'You must be assigned to an institution before logging items.' });
+    }
+
+    const institution = await Institution.findById(req.user.institution);
+    if (!institution) {
+      return res.status(403).json({ error: 'Your assigned institution was not found.' });
+    }
+
+    if (institution.status !== 'active') {
+      return res.status(403).json({ error: 'Your institution is not active. Item logging is disabled until approval.' });
+    }
+
     const { title, category, description, color, brand, condition, dateFound, locationFound, storageReference, photos } = req.body;
 
     if (!title) {
@@ -17,7 +35,7 @@ router.post('/', verifyToken, async (req, res) => {
     }
 
     const item = await Item.create({
-      institution: req.user.institution,
+      institution: institution._id,
       loggedBy: req.user._id,
       title,
       category,

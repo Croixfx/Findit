@@ -30,11 +30,15 @@ router.post('/register', async (req, res) => {
       return res.status(409).json({ error: 'User already exists', user });
     }
 
+    const normalizedRole = String(role).toLowerCase();
+    const accountStatus = normalizedRole === 'owner' ? 'active' : 'pending';
+
     user = await User.create({
       firebaseUid: firebase_uid,
       email,
       fullName: full_name || fullName || email.split('@')[0],
-      role,
+      role: normalizedRole,
+      accountStatus,
       institution: institution_id || institutionId || null
     });
 

@@ -41,14 +41,14 @@ class _SubmitClaimScreenState extends State<SubmitClaimScreen> {
     setState(() => _uploading = true);
     try {
       final url = await UploadService.uploadClaimProof(file.path);
-      if (url != null && mounted) {
+      if (mounted) {
         setState(() {
           _proofImagePath = file.path;
           _proofImageUrl = url;
         });
-      } else if (mounted) {
-        _snack('Failed to upload image. Please try again.');
       }
+    } catch (e) {
+      if (mounted) _snack(e.toString().replaceFirst('Exception: ', ''));
     } finally {
       if (mounted) setState(() => _uploading = false);
     }

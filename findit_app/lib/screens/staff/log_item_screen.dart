@@ -55,14 +55,14 @@ class _LogItemScreenState extends State<LogItemScreen> {
     setState(() => _uploading = true);
     try {
       final url = await UploadService.uploadItemPhoto(file.path);
-      if (url != null && mounted) {
+      if (mounted) {
         setState(() {
           _localPaths.add(file.path);
           _photoUrls.add(url);
         });
-      } else if (mounted) {
-        _showSnack('Failed to upload image. Please try again.');
       }
+    } catch (e) {
+      if (mounted) _showSnack(e.toString().replaceFirst('Exception: ', ''));
     } finally {
       if (mounted) setState(() => _uploading = false);
     }

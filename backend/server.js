@@ -37,6 +37,7 @@ app.use('/api/v1/notifications', require('./routes/notifications'));
 app.use('/api/v1/messages', require('./routes/messages'));
 app.use('/api/v1/admin', require('./routes/admin'));
 app.use('/api/v1/reports', require('./routes/reports'));
+app.use('/api/v1/upload', require('./routes/upload'));
 
 // Socket.io — verify Firebase token from handshake
 io.use(async (socket, next) => {

@@ -889,7 +889,15 @@ class _AdminItemCard extends StatelessWidget {
     return all.where((s) => s != current).toList();
   }
 
-  static String _statusLabel(String s) => s.replaceAll('_', ' ').toUpperCase();
+  static String _statusLabel(String s) {
+    const labels = {
+      'available': 'Available',
+      'ready_for_pickup': 'Pickup',
+      'returned': 'Returned',
+      'discarded': 'Discard',
+    };
+    return labels[s] ?? s.replaceAll('_', ' ');
+  }
 
   static Color _statusColor(String s) {
     switch (s) {
@@ -1095,8 +1103,8 @@ class _ActionCard extends StatelessWidget {
                       .titleSmall
                       ?.copyWith(fontWeight: FontWeight.w600)),
             ),
-            if (badge != null) ...[const SizedBox(width: 8), badge!],
-            if (chip != null) ...[const SizedBox(width: 8), chip!],
+            if (badge != null) ...[const SizedBox(width: 8), Flexible(child: badge!)],
+            if (chip != null) ...[const SizedBox(width: 8), Flexible(child: chip!)],
           ]),
           if (subtitle.isNotEmpty) ...[
             const SizedBox(height: 2),
@@ -1117,7 +1125,7 @@ class _ActionCard extends StatelessWidget {
           const SizedBox(height: 8),
           const Divider(height: 1),
           const SizedBox(height: 4),
-          Wrap(spacing: 4, runSpacing: 0, children: actions.map(_compact).toList()),
+          Wrap(spacing: 4, runSpacing: 4, children: actions.map(_compact).toList()),
         ]),
       ),
     );

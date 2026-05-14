@@ -1,4 +1,5 @@
 import 'package:flutter/foundation.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
 import '../models/user_model.dart';
 import '../models/institution_model.dart';
 import '../services/auth_service.dart';
@@ -63,6 +64,7 @@ class FindItAuthProvider extends ChangeNotifier {
       } else {
         institution = null;
       }
+      if (currentUser != null) await _saveFcmToken();
     } catch (_) {
       currentUser = null;
       institution = null;
@@ -71,6 +73,15 @@ class FindItAuthProvider extends ChangeNotifier {
       initializing = false;
       notifyListeners();
     }
+  }
+
+  Future<void> _saveFcmToken() async {
+    try {
+      final token = await FirebaseMessaging.instance.getToken();
+      if (token != null && token.isNotEmpty) {
+        await _apiService.post('/notifications/token', {'fcmToken': token});
+      }
+    } catch (_) {}
   }
 
   Future<void> refreshInstitutionStatus() async {
@@ -96,6 +107,7 @@ class FindItAuthProvider extends ChangeNotifier {
       } else {
         institution = null;
       }
+      await _saveFcmToken();
       error = null;
     } catch (e) {
       error = _message(e);
@@ -135,6 +147,7 @@ class FindItAuthProvider extends ChangeNotifier {
       } else {
         institution = null;
       }
+      await _saveFcmToken();
       error = null;
     } catch (e) {
       error = _message(e);

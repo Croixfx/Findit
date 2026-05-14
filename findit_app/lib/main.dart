@@ -1,9 +1,13 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:provider/provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'firebase_options.dart';
 import 'providers/auth_provider.dart';
+import 'screens/home_screen.dart';
 import 'screens/auth/login_screen.dart';
 import 'screens/auth/register_screen.dart';
 import 'screens/admin/admin_dashboard_screen.dart';
@@ -11,19 +15,63 @@ import 'screens/staff/staff_home_screen.dart';
 import 'screens/staff/institution_setup_screen.dart';
 import 'screens/staff/pending_approval_screen.dart';
 import 'screens/staff/log_item_screen.dart';
-import 'screens/staff/claim_review_screen.dart';
 import 'screens/owner/owner_home_screen.dart';
-import 'screens/owner/institution_items_screen.dart';
-import 'screens/owner/item_detail_owner_screen.dart';
-import 'screens/owner/submit_claim_screen.dart';
-import 'screens/owner/claim_status_screen.dart';
-import 'screens/shared/claim_chat_screen.dart';
+
+final _localNotifications = FlutterLocalNotificationsPlugin();
+
+const _androidChannel = AndroidNotificationChannel(
+  'findit_channel',
+  'FindIt Notifications',
+  importance: Importance.high,
+);
+
+@pragma('vm:entry-point')
+Future<void> _onBackgroundMessage(RemoteMessage message) async {
+  await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
+}
+
+Future<void> _showForegroundNotification(RemoteMessage message) async {
+  final n = message.notification;
+  if (n == null) return;
+  await _localNotifications.show(
+    message.hashCode,
+    n.title,
+    n.body,
+    NotificationDetails(
+      android: AndroidNotificationDetails(
+        _androidChannel.id,
+        _androidChannel.name,
+        importance: _androidChannel.importance,
+        priority: Priority.high,
+      ),
+    ),
+  );
+}
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  await Firebase.initializeApp(
-    options: DefaultFirebaseOptions.currentPlatform,
+  await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
+
+  FirebaseMessaging.onBackgroundMessage(_onBackgroundMessage);
+
+  await _localNotifications.initialize(
+    const InitializationSettings(
+      android: AndroidInitializationSettings('@mipmap/ic_launcher'),
+    ),
   );
+  await _localNotifications
+      .resolvePlatformSpecificImplementation<
+          AndroidFlutterLocalNotificationsPlugin>()
+      ?.createNotificationChannel(_androidChannel);
+
+  FirebaseMessaging.onMessage.listen(_showForegroundNotification);
+
+  await FirebaseMessaging.instance.requestPermission(
+    alert: true,
+    badge: true,
+    sound: true,
+  );
+
   runApp(const FindItApp());
 }
 
@@ -71,9 +119,40 @@ class _AuthGate extends StatefulWidget {
 
 class _AuthGateState extends State<_AuthGate> {
   bool _loadTriggered = false;
+  bool _checkingOnboarding = true;
+  bool _showOnboarding = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _initOnboarding();
+  }
+
+  Future<void> _initOnboarding() async {
+    final prefs = await SharedPreferences.getInstance();
+    final seen = prefs.getBool('onboarding_seen') ?? false;
+    if (mounted) {
+      setState(() {
+        _showOnboarding = !seen;
+        _checkingOnboarding = false;
+      });
+    }
+  }
+
+  Future<void> _completeOnboarding() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool('onboarding_seen', true);
+    if (mounted) setState(() => _showOnboarding = false);
+  }
 
   @override
   Widget build(BuildContext context) {
+    if (_checkingOnboarding) return const _LoadingScreen();
+
+    if (_showOnboarding) {
+      return HomeScreen(onCompleted: _completeOnboarding);
+    }
+
     return StreamBuilder<User?>(
       stream: FirebaseAuth.instance.authStateChanges(),
       builder: (context, snapshot) {

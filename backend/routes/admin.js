@@ -6,6 +6,7 @@ const Claim = require('../models/Claim');
 const User = require('../models/User');
 const verifyToken = require('../middleware/auth');
 const firebaseAdmin = require('../config/firebase');
+const { sendNotification } = require('../utils/notify');
 
 function requireAdmin(req, res, next) {
   if (req.user.role !== 'admin') {
@@ -432,6 +433,27 @@ router.post('/staff/:id/approval', verifyToken, requireAdmin, async (req, res) =
     await User.findByIdAndUpdate(req.params.id, { accountStatus });
 
     res.json({ message: `Institution ${institutionStatus}`, institution });
+
+    // Notify the staff member of the outcome
+    try {
+      if (isApprove) {
+        await sendNotification(staff, {
+          title: 'Institution Approved',
+          body: `"${institution.name}" has been approved. You can now log found items.`,
+          type: 'institution_approved',
+          data: { institutionId: institution._id.toString() },
+        });
+      } else {
+        await sendNotification(staff, {
+          title: 'Institution Rejected',
+          body: `Your institution registration for "${institution.name}" was rejected.`,
+          type: 'institution_rejected',
+          data: { institutionId: institution._id.toString() },
+        });
+      }
+    } catch (notifyErr) {
+      console.error('Notify staff approval error:', notifyErr.message);
+    }
   } catch (error) {
     res.status(500).json({ error: error.message });
   }

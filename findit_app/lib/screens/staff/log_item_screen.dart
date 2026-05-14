@@ -49,8 +49,28 @@ class _LogItemScreenState extends State<LogItemScreen> {
     super.dispose();
   }
 
+  Future<ImageSource?> _askSource() => showModalBottomSheet<ImageSource>(
+        context: context,
+        builder: (_) => SafeArea(
+          child: Column(mainAxisSize: MainAxisSize.min, children: [
+            ListTile(
+              leading: const Icon(Icons.camera_alt_rounded),
+              title: const Text('Take a photo'),
+              onTap: () => Navigator.pop(context, ImageSource.camera),
+            ),
+            ListTile(
+              leading: const Icon(Icons.photo_library_rounded),
+              title: const Text('Choose from gallery'),
+              onTap: () => Navigator.pop(context, ImageSource.gallery),
+            ),
+          ]),
+        ),
+      );
+
   Future<void> _pickImage() async {
-    final file = await _picker.pickImage(source: ImageSource.gallery, imageQuality: 75);
+    final source = await _askSource();
+    if (source == null) return;
+    final file = await _picker.pickImage(source: source, imageQuality: 75);
     if (file == null) return;
     setState(() => _uploading = true);
     try {

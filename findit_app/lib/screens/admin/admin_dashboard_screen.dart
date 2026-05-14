@@ -773,7 +773,6 @@ class _AdminItemsTabState extends State<_AdminItemsTab> {
 
   @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
     return Column(
       children: [
         // Filters
@@ -784,6 +783,7 @@ class _AdminItemsTabState extends State<_AdminItemsTab> {
               Expanded(
                 child: DropdownButtonFormField<String?>(
                   value: _instFilter,
+                  isExpanded: true,
                   decoration: InputDecoration(
                     labelText: 'Institution',
                     isDense: true,
@@ -794,7 +794,7 @@ class _AdminItemsTabState extends State<_AdminItemsTab> {
                     const DropdownMenuItem<String?>(value: null, child: Text('All')),
                     ...widget.institutions.map((i) => DropdownMenuItem<String?>(
                         value: i['_id'] as String?,
-                        child: Text(i['name'] as String? ?? ''))),
+                        child: Text(i['name'] as String? ?? '', overflow: TextOverflow.ellipsis))),
                   ],
                   onChanged: (v) { setState(() => _instFilter = v); _load(); },
                 ),
@@ -803,6 +803,7 @@ class _AdminItemsTabState extends State<_AdminItemsTab> {
               Expanded(
                 child: DropdownButtonFormField<String?>(
                   value: _statusFilter,
+                  isExpanded: true,
                   decoration: InputDecoration(
                     labelText: 'Status',
                     isDense: true,
@@ -854,7 +855,6 @@ class _AdminItemCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
     return _ActionCard(
       title: item.title,
       subtitle: item.institutionName,
@@ -1098,13 +1098,15 @@ class _ActionCard extends StatelessWidget {
           Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
             Expanded(
               child: Text(title,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
                   style: Theme.of(context)
                       .textTheme
                       .titleSmall
                       ?.copyWith(fontWeight: FontWeight.w600)),
             ),
-            if (badge != null) ...[const SizedBox(width: 8), Flexible(child: badge!)],
-            if (chip != null) ...[const SizedBox(width: 8), Flexible(child: chip!)],
+            if (badge != null) ...[const SizedBox(width: 8), badge!],
+            if (chip != null) ...[const SizedBox(width: 8), chip!],
           ]),
           if (subtitle.isNotEmpty) ...[
             const SizedBox(height: 2),
@@ -1132,44 +1134,37 @@ class _ActionCard extends StatelessWidget {
   }
 
   static Widget _compact(Widget btn) {
-    const style = ButtonStyle(
-      minimumSize: WidgetStatePropertyAll(Size(0, 32)),
-      padding: WidgetStatePropertyAll(EdgeInsets.symmetric(horizontal: 12)),
+    final compactFilled = FilledButton.styleFrom(
+      minimumSize: const Size(0, 32),
+      padding: const EdgeInsets.symmetric(horizontal: 12),
+      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+    );
+    final compactOutlined = OutlinedButton.styleFrom(
+      minimumSize: const Size(0, 32),
+      padding: const EdgeInsets.symmetric(horizontal: 12),
+      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+    );
+    final compactText = TextButton.styleFrom(
+      minimumSize: const Size(0, 32),
+      padding: const EdgeInsets.symmetric(horizontal: 8),
       tapTargetSize: MaterialTapTargetSize.shrinkWrap,
     );
     if (btn is FilledButton) {
       return FilledButton(
           onPressed: btn.onPressed,
-          style: FilledButton.styleFrom(
-            minimumSize: const Size(0, 32),
-            padding: const EdgeInsets.symmetric(horizontal: 12),
-            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-          ),
+          style: compactFilled.merge(btn.style),
           child: btn.child!);
     }
     if (btn is OutlinedButton) {
       return OutlinedButton(
           onPressed: btn.onPressed,
-          style: btn.style?.copyWith(
-            minimumSize: const WidgetStatePropertyAll(Size(0, 32)),
-            padding: const WidgetStatePropertyAll(EdgeInsets.symmetric(horizontal: 12)),
-            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-          ) ?? OutlinedButton.styleFrom(
-            minimumSize: const Size(0, 32),
-            padding: const EdgeInsets.symmetric(horizontal: 12),
-            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-          ),
+          style: compactOutlined.merge(btn.style),
           child: btn.child!);
     }
     if (btn is TextButton) {
       return TextButton(
           onPressed: btn.onPressed,
-          style: (btn.style ?? const ButtonStyle()).copyWith(
-            minimumSize: const WidgetStatePropertyAll(Size(0, 32)),
-            padding: const WidgetStatePropertyAll(
-                EdgeInsets.symmetric(horizontal: 8)),
-            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-          ),
+          style: compactText.merge(btn.style),
           child: btn.child!);
     }
     return btn;

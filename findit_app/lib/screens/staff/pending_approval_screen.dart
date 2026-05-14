@@ -3,8 +3,24 @@ import 'package:provider/provider.dart';
 import '../../providers/auth_provider.dart';
 import '../auth/login_screen.dart';
 
-class PendingApprovalScreen extends StatelessWidget {
+class PendingApprovalScreen extends StatefulWidget {
   const PendingApprovalScreen({super.key});
+
+  @override
+  State<PendingApprovalScreen> createState() => _PendingApprovalScreenState();
+}
+
+class _PendingApprovalScreenState extends State<PendingApprovalScreen> {
+  bool _checking = false;
+
+  Future<void> _checkStatus() async {
+    setState(() => _checking = true);
+    try {
+      await context.read<FindItAuthProvider>().refreshInstitutionStatus();
+    } finally {
+      if (mounted) setState(() => _checking = false);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -67,6 +83,21 @@ class PendingApprovalScreen extends StatelessWidget {
                     .bodyMedium
                     ?.copyWith(color: cs.onSurfaceVariant),
               ),
+              if (!isSuspended) ...[
+                const SizedBox(height: 32),
+                _checking
+                    ? const CircularProgressIndicator()
+                    : FilledButton.icon(
+                        onPressed: _checkStatus,
+                        icon: const Icon(Icons.refresh_rounded),
+                        label: const Text('Check Approval Status'),
+                        style: FilledButton.styleFrom(
+                          minimumSize: const Size(double.infinity, 48),
+                          shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12)),
+                        ),
+                      ),
+              ],
               if (institution?.name != null ||
                   institution?.contactEmail != null) ...[
                 const SizedBox(height: 32),

@@ -73,6 +73,18 @@ class FindItAuthProvider extends ChangeNotifier {
     }
   }
 
+  Future<void> refreshInstitutionStatus() async {
+    if (_loadingUser) return;
+    _loadingUser = true;
+    notifyListeners();
+    try {
+      await _loadStaffInstitution();
+    } finally {
+      _loadingUser = false;
+      notifyListeners();
+    }
+  }
+
   Future<void> login(String email, String password) async {
     _begin();
     try {

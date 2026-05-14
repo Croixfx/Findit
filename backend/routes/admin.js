@@ -101,6 +101,17 @@ router.patch('/institutions/:id', verifyToken, requireAdmin, async (req, res) =>
     );
 
     if (!institution) return res.status(404).json({ error: 'Institution not found' });
+
+    if (payload.status) {
+      const accountStatus =
+        payload.status === 'active' ? 'active' :
+        payload.status === 'suspended' ? 'suspended' : 'pending';
+      await User.updateMany(
+        { institution: institution._id, role: 'staff' },
+        { accountStatus }
+      );
+    }
+
     res.json(institution);
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -407,15 +418,20 @@ router.post('/staff/:id/approval', verifyToken, requireAdmin, async (req, res) =
       return res.status(400).json({ error: 'staff has no linked institution' });
     }
 
-    const status = String(action).toLowerCase() === 'approve' ? 'active' : 'suspended';
+    const isApprove = String(action).toLowerCase() === 'approve';
+    const institutionStatus = isApprove ? 'active' : 'suspended';
+    const accountStatus = isApprove ? 'active' : 'rejected';
+
     const institution = await Institution.findByIdAndUpdate(
       targetInstitutionId,
-      { status },
+      { status: institutionStatus },
       { new: true }
     );
     if (!institution) return res.status(404).json({ error: 'Institution not found' });
 
-    res.json({ message: `Institution ${status}`, institution });
+    await User.findByIdAndUpdate(req.params.id, { accountStatus });
+
+    res.json({ message: `Institution ${institutionStatus}`, institution });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }

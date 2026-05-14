@@ -11,8 +11,8 @@ router.post('/', verifyToken, async (req, res) => {
       return res.status(403).json({ error: 'Only staff can log items' });
     }
 
-    if (req.user.accountStatus !== 'active') {
-      return res.status(403).json({ error: 'Your staff account is not active. Please wait for admin approval.' });
+    if (req.user.accountStatus === 'suspended' || req.user.accountStatus === 'rejected') {
+      return res.status(403).json({ error: 'Your account has been suspended or rejected.' });
     }
 
     if (!req.user.institution) {

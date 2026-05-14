@@ -18,6 +18,8 @@ class ClaimModel {
   final DateTime createdAt;
   final DateTime? reviewedAt;
   final String? reviewedById;
+  final bool ownerConfirmed;
+  final DateTime? confirmedAt;
 
   const ClaimModel({
     required this.id,
@@ -37,6 +39,8 @@ class ClaimModel {
     required this.createdAt,
     this.reviewedAt,
     this.reviewedById,
+    this.ownerConfirmed = false,
+    this.confirmedAt,
   });
 
   factory ClaimModel.fromJson(Map<String, dynamic> json) {
@@ -106,6 +110,10 @@ class ClaimModel {
           ? DateTime.tryParse(json['reviewedAt'] as String)
           : null,
       reviewedById: reviewedById,
+      ownerConfirmed: json['ownerConfirmed'] as bool? ?? false,
+      confirmedAt: json['confirmedAt'] != null
+          ? DateTime.tryParse(json['confirmedAt'] as String)
+          : null,
     );
   }
 

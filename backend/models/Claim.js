@@ -12,7 +12,9 @@ const claimSchema = new mongoose.Schema({
   proofImageUrl: { type: String },
   rejectionReason: { type: String },
   reviewedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
-  reviewedAt: { type: Date, default: null }
+  reviewedAt: { type: Date, default: null },
+  ownerConfirmed: { type: Boolean, default: false },
+  confirmedAt: { type: Date, default: null }
 }, { timestamps: true });
 
 module.exports = mongoose.model('Claim', claimSchema);

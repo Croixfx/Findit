@@ -46,6 +46,8 @@ class NotificationModel {
         return Icons.verified_rounded;
       case 'institution_rejected':
         return Icons.block_rounded;
+      case 'owner_confirmed':
+        return Icons.verified_user_rounded;
       default:
         return Icons.notifications_rounded;
     }

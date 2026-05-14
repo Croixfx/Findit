@@ -535,14 +535,45 @@ router.patch('/claims/:id/status', verifyToken, requireAdmin, async (req, res) =
     if (!status || !validStatuses.includes(status)) {
       return res.status(400).json({ error: `status must be one of: ${validStatuses.join(', ')}` });
     }
-    const claim = await Claim.findById(req.params.id);
+
+    const claim = await Claim.findById(req.params.id).populate('claimant');
     if (!claim) return res.status(404).json({ error: 'Claim not found' });
+
+    const item = await Item.findById(claim.item);
+
     claim.status = status;
     if (status === 'rejected' && rejectionReason) claim.rejectionReason = rejectionReason;
     claim.reviewedBy = req.user._id;
     claim.reviewedAt = new Date();
     await claim.save();
+
+    // Auto-sync item status
+    if (item) {
+      const itemStatusMap = { approved: 'ready_for_pickup', returned: 'returned' };
+      const newItemStatus = itemStatusMap[status];
+      if (newItemStatus) await Item.findByIdAndUpdate(item._id, { status: newItemStatus });
+    }
+
     res.json(claim);
+
+    // Notify claim owner (same payloads as staff endpoint)
+    if (claim.claimant) {
+      try {
+        const itemTitle = item?.title ?? 'the item';
+        const notifMap = {
+          under_review: { title: 'Claim Under Review', body: `Your claim for "${itemTitle}" is being reviewed.`, type: 'claim_under_review' },
+          approved:     { title: 'Claim Approved',     body: `Your claim for "${itemTitle}" is approved. Chat with the institution to arrange pickup.`, type: 'claim_approved' },
+          rejected:     { title: 'Claim Rejected',     body: rejectionReason ? `Your claim for "${itemTitle}" was rejected: ${rejectionReason}` : `Your claim for "${itemTitle}" was not approved.`, type: 'claim_rejected' },
+          returned:     { title: 'Item Ready — Confirm Receipt', body: `"${itemTitle}" has been handed back. Please confirm receipt in the app.`, type: 'claim_returned' },
+        };
+        const notif = notifMap[status];
+        if (notif) {
+          await sendNotification(claim.claimant, { ...notif, data: { claimId: claim._id.toString() } });
+        }
+      } catch (notifyErr) {
+        console.error('Admin claim notify error:', notifyErr.message);
+      }
+    }
   } catch (error) {
     res.status(500).json({ error: error.message });
   }

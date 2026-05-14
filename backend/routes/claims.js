@@ -6,6 +6,47 @@ const User = require('../models/User');
 const verifyToken = require('../middleware/auth');
 const { sendNotification } = require('../utils/notify');
 
+// Notification payloads for each claim status transition
+function _claimNotif(status, itemTitle, rejectionReason) {
+  const map = {
+    under_review: {
+      title: 'Claim Under Review',
+      body: `Your claim for "${itemTitle}" is being reviewed.`,
+      type: 'claim_under_review',
+    },
+    approved: {
+      title: 'Claim Approved',
+      body: `Your claim for "${itemTitle}" is approved. Chat with the institution to arrange pickup.`,
+      type: 'claim_approved',
+    },
+    rejected: {
+      title: 'Claim Rejected',
+      body: rejectionReason
+        ? `Your claim for "${itemTitle}" was rejected: ${rejectionReason}`
+        : `Your claim for "${itemTitle}" was not approved.`,
+      type: 'claim_rejected',
+    },
+    returned: {
+      title: 'Item Ready — Confirm Receipt',
+      body: `"${itemTitle}" has been handed back. Please confirm receipt in the app.`,
+      type: 'claim_returned',
+    },
+  };
+  return map[status] || null;
+}
+
+// Sync item status when a claim status changes
+async function _syncItemStatus(itemId, claimStatus) {
+  const itemStatusMap = {
+    approved: 'ready_for_pickup',
+    returned: 'returned',
+  };
+  const newItemStatus = itemStatusMap[claimStatus];
+  if (newItemStatus) {
+    await Item.findByIdAndUpdate(itemId, { status: newItemStatus });
+  }
+}
+
 // POST /api/v1/claims — owner only
 router.post('/', verifyToken, async (req, res) => {
   try {
@@ -131,37 +172,15 @@ router.patch('/:id/status', verifyToken, async (req, res) => {
     claim.reviewedAt = new Date();
     await claim.save();
 
+    // Auto-sync item status
+    await _syncItemStatus(item._id, status);
+
     res.json(claim);
 
     // Notify claim owner of the status change
     if (claim.claimant) {
       try {
-        const notifications = {
-          under_review: {
-            title: 'Claim Under Review',
-            body: `Your claim for "${item.title}" is being reviewed.`,
-            type: 'claim_under_review',
-          },
-          approved: {
-            title: 'Claim Approved',
-            body: `Your claim for "${item.title}" has been approved. You can now chat with the institution.`,
-            type: 'claim_approved',
-          },
-          rejected: {
-            title: 'Claim Rejected',
-            body: rejectionReason
-              ? `Your claim for "${item.title}" was rejected: ${rejectionReason}`
-              : `Your claim for "${item.title}" was rejected.`,
-            type: 'claim_rejected',
-          },
-          returned: {
-            title: 'Item Returned',
-            body: `Congratulations! "${item.title}" has been marked as returned to you.`,
-            type: 'claim_returned',
-          },
-        };
-
-        const notif = notifications[status];
+        const notif = _claimNotif(status, item.title, rejectionReason);
         if (notif) {
           await sendNotification(claim.claimant, {
             ...notif,
@@ -171,6 +190,54 @@ router.patch('/:id/status', verifyToken, async (req, res) => {
       } catch (notifyErr) {
         console.error('Notify owner error:', notifyErr.message);
       }
+    }
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// PATCH /api/v1/claims/:id/confirm — owner confirms physical receipt
+router.patch('/:id/confirm', verifyToken, async (req, res) => {
+  try {
+    if (req.user.role !== 'owner') {
+      return res.status(403).json({ error: 'Only owners can confirm receipt' });
+    }
+
+    const claim = await Claim.findById(req.params.id);
+    if (!claim) return res.status(404).json({ error: 'Claim not found' });
+
+    if (claim.claimant.toString() !== req.user._id.toString()) {
+      return res.status(403).json({ error: 'You can only confirm your own claims' });
+    }
+
+    if (claim.status !== 'returned') {
+      return res.status(400).json({ error: 'Item must be marked as returned before confirming receipt' });
+    }
+
+    if (claim.ownerConfirmed) {
+      return res.status(409).json({ error: 'Receipt already confirmed' });
+    }
+
+    claim.ownerConfirmed = true;
+    claim.confirmedAt = new Date();
+    await claim.save();
+
+    res.json(claim);
+
+    // Notify institution staff that owner confirmed
+    try {
+      const item = await Item.findById(claim.item);
+      const staffUsers = await User.find({ institution: item?.institution, role: 'staff' });
+      await Promise.all(staffUsers.map(s =>
+        sendNotification(s, {
+          title: 'Receipt Confirmed',
+          body: `The owner confirmed receiving "${item?.title ?? 'the item'}".`,
+          type: 'owner_confirmed',
+          data: { claimId: claim._id.toString() },
+        })
+      ));
+    } catch (notifyErr) {
+      console.error('Notify staff on confirm error:', notifyErr.message);
     }
   } catch (error) {
     res.status(500).json({ error: error.message });

@@ -2,7 +2,6 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import '../../models/claim_model.dart';
 import '../../services/api_service.dart';
-import '../../utils/constants.dart';
 import '../shared/claim_chat_screen.dart';
 
 class ClaimStatusScreen extends StatefulWidget {

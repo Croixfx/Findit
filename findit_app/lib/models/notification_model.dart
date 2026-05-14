@@ -38,8 +38,14 @@ class NotificationModel {
         return Icons.cancel_rounded;
       case 'claim_returned':
         return Icons.done_all_rounded;
+      case 'claim_under_review':
+        return Icons.hourglass_top_rounded;
       case 'new_claim':
         return Icons.assignment_rounded;
+      case 'institution_approved':
+        return Icons.verified_rounded;
+      case 'institution_rejected':
+        return Icons.block_rounded;
       default:
         return Icons.notifications_rounded;
     }

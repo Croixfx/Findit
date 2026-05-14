@@ -2,9 +2,9 @@ const express = require('express');
 const router = express.Router();
 const Claim = require('../models/Claim');
 const Item = require('../models/Item');
-const Notification = require('../models/Notification');
+const User = require('../models/User');
 const verifyToken = require('../middleware/auth');
-const admin = require('../config/firebase');
+const { sendNotification } = require('../utils/notify');
 
 // POST /api/v1/claims — owner only
 router.post('/', verifyToken, async (req, res) => {
@@ -13,7 +13,7 @@ router.post('/', verifyToken, async (req, res) => {
       return res.status(403).json({ error: 'Only owners can submit claims' });
     }
 
-    const { itemId, ownershipDescription } = req.body;
+    const { itemId, ownershipDescription, proofImageUrl } = req.body;
     if (!itemId) return res.status(400).json({ error: 'itemId is required' });
 
     const item = await Item.findById(itemId);
@@ -27,10 +27,26 @@ router.post('/', verifyToken, async (req, res) => {
     const claim = await Claim.create({
       item: itemId,
       claimant: req.user._id,
-      proofDescription: ownershipDescription
+      proofDescription: ownershipDescription,
+      ...(proofImageUrl ? { proofImageUrl } : {}),
     });
 
     res.status(201).json(claim);
+
+    // Notify all staff in the item's institution
+    try {
+      const staffUsers = await User.find({ institution: item.institution, role: 'staff' });
+      await Promise.all(staffUsers.map(s =>
+        sendNotification(s, {
+          title: 'New Claim Submitted',
+          body: `A claim was submitted for "${item.title}"`,
+          type: 'new_claim',
+          data: { claimId: claim._id.toString(), itemId: item._id.toString() },
+        })
+      ));
+    } catch (notifyErr) {
+      console.error('Notify staff error:', notifyErr.message);
+    }
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
@@ -115,26 +131,47 @@ router.patch('/:id/status', verifyToken, async (req, res) => {
     claim.reviewedAt = new Date();
     await claim.save();
 
-    if (status === 'approved' && claim.claimant?.fcmToken) {
-      try {
-        const notification = await Notification.create({
-          user: claim.claimant._id,
-          title: 'Claim Approved',
-          body: 'Your claim has been approved. You can now chat with the institution.',
-          type: 'claim_approved'
-        });
+    res.json(claim);
 
-        await admin.messaging().send({
-          token: claim.claimant.fcmToken,
-          notification: { title: notification.title, body: notification.body },
-          data: { type: 'claim_approved', claimId: claim._id.toString() }
-        });
-      } catch (fcmError) {
-        console.error('FCM send error:', fcmError.message);
+    // Notify claim owner of the status change
+    if (claim.claimant) {
+      try {
+        const notifications = {
+          under_review: {
+            title: 'Claim Under Review',
+            body: `Your claim for "${item.title}" is being reviewed.`,
+            type: 'claim_under_review',
+          },
+          approved: {
+            title: 'Claim Approved',
+            body: `Your claim for "${item.title}" has been approved. You can now chat with the institution.`,
+            type: 'claim_approved',
+          },
+          rejected: {
+            title: 'Claim Rejected',
+            body: rejectionReason
+              ? `Your claim for "${item.title}" was rejected: ${rejectionReason}`
+              : `Your claim for "${item.title}" was rejected.`,
+            type: 'claim_rejected',
+          },
+          returned: {
+            title: 'Item Returned',
+            body: `Congratulations! "${item.title}" has been marked as returned to you.`,
+            type: 'claim_returned',
+          },
+        };
+
+        const notif = notifications[status];
+        if (notif) {
+          await sendNotification(claim.claimant, {
+            ...notif,
+            data: { claimId: claim._id.toString() },
+          });
+        }
+      } catch (notifyErr) {
+        console.error('Notify owner error:', notifyErr.message);
       }
     }
-
-    res.json(claim);
   } catch (error) {
     res.status(500).json({ error: error.message });
   }

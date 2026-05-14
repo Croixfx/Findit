@@ -446,7 +446,7 @@ class _OverviewTab extends StatelessWidget {
     return GridView.builder(
       padding: const EdgeInsets.all(16),
       gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: 2, childAspectRatio: 1.4,
+        crossAxisCount: 2, childAspectRatio: 1.1,
         crossAxisSpacing: 12, mainAxisSpacing: 12,
       ),
       itemCount: entries.length,

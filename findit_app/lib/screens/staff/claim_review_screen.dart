@@ -158,6 +158,8 @@ class _ClaimReviewScreenState extends State<ClaimReviewScreen> {
                   builder: (_) => ClaimChatScreen(
                     claimId: _claim!.id,
                     itemTitle: _claim!.itemTitle ?? 'Item',
+                    claimStatus: _claim!.status,
+                    ownerConfirmed: _claim!.ownerConfirmed,
                   ),
                 ),
               ),

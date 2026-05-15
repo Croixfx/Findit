@@ -275,6 +275,37 @@ class _ClaimsTabState extends State<_ClaimsTab> {
     }
   }
 
+  Future<void> _deleteClaim(ClaimModel claim) async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Remove Claim'),
+        content: const Text('Remove this closed claim from the list?'),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Cancel')),
+          FilledButton(
+            style: FilledButton.styleFrom(
+                backgroundColor: Theme.of(context).colorScheme.error),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Remove'),
+          ),
+        ],
+      ),
+    );
+    if (ok != true) return;
+    try {
+      await _api.delete('/claims/${claim.id}');
+      await _load();
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(e.toString().replaceFirst('Exception: ', ''))));
+      }
+    }
+  }
+
   List<ClaimModel> get _filtered {
     if (_filter == 'all') return _claims;
     return _claims.where((c) => c.status == _filter).toList();
@@ -374,9 +405,14 @@ class _ClaimsTabState extends State<_ClaimsTab> {
                                                 builder: (_) => ClaimChatScreen(
                                                   claimId: claim.id,
                                                   itemTitle: claim.itemTitle ?? 'Item',
+                                                  claimStatus: claim.status,
+                                                  ownerConfirmed: claim.ownerConfirmed,
                                                 ),
                                               ),
                                             )
+                                        : null,
+                                    onDelete: claim.isDeletableByStaff
+                                        ? () => _deleteClaim(claim)
                                         : null,
                                   );
                                 },
@@ -803,10 +839,11 @@ class _ItemCard extends StatelessWidget {
 }
 
 class _ClaimCard extends StatelessWidget {
-  const _ClaimCard({required this.claim, required this.onTap, this.onChat});
+  const _ClaimCard({required this.claim, required this.onTap, this.onChat, this.onDelete});
   final ClaimModel claim;
   final VoidCallback onTap;
   final VoidCallback? onChat;
+  final VoidCallback? onDelete;
 
   @override
   Widget build(BuildContext context) {
@@ -864,6 +901,18 @@ class _ClaimCard extends StatelessWidget {
                     claim.statusColor.withOpacity(0.12),
                     claim.statusColor,
                   ),
+                  if (onDelete != null) ...[
+                    const SizedBox(width: 4),
+                    InkWell(
+                      onTap: onDelete,
+                      borderRadius: BorderRadius.circular(16),
+                      child: Padding(
+                        padding: const EdgeInsets.all(4),
+                        child: Icon(Icons.close_rounded,
+                            size: 18, color: cs.onSurfaceVariant),
+                      ),
+                    ),
+                  ],
                 ],
               ),
               const SizedBox(height: 10),

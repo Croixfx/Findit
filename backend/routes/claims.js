@@ -161,6 +161,13 @@ router.patch('/:id/status', verifyToken, async (req, res) => {
     const claim = await Claim.findById(req.params.id).populate('claimant');
     if (!claim) return res.status(404).json({ error: 'Claim not found' });
 
+    if (['returned', 'rejected'].includes(claim.status)) {
+      return res.status(400).json({ error: `Claim is already ${claim.status} and cannot be modified.` });
+    }
+    if (claim.ownerConfirmed) {
+      return res.status(400).json({ error: 'Claim is closed — owner has already confirmed receipt.' });
+    }
+
     const item = await Item.findById(claim.item);
     if (!item || !req.user.institution || !req.user.institution.equals(item.institution)) {
       return res.status(403).json({ error: 'You can only update claims for your institution\'s items' });

@@ -122,6 +122,9 @@ router.patch('/:id', verifyToken, async (req, res) => {
     if (!item.institution.equals(req.user.institution)) {
       return res.status(403).json({ error: 'You can only update items from your institution' });
     }
+    if (req.body.status !== undefined && ['returned', 'discarded'].includes(item.status)) {
+      return res.status(400).json({ error: `Item is already ${item.status} and its status cannot be changed.` });
+    }
     const allowed = ['title', 'description', 'category', 'color', 'brand',
       'condition', 'locationFound', 'storageReference', 'status', 'photos'];
     const payload = {};

@@ -43,6 +43,50 @@ router.post('/', verifyToken, async (req, res) => {
   }
 });
 
+// PATCH /api/v1/institutions/my — staff edits own institution
+router.patch('/my', verifyToken, async (req, res) => {
+  try {
+    if (req.user.role !== 'staff') {
+      return res.status(403).json({ error: 'Only staff can edit their institution' });
+    }
+    if (!req.user.institution) {
+      return res.status(404).json({ error: 'No institution linked to your account' });
+    }
+    const allowed = ['name', 'type', 'address', 'contactEmail', 'phone'];
+    const payload = {};
+    for (const key of allowed) {
+      if (req.body[key] !== undefined) payload[key] = req.body[key];
+    }
+    if (Object.keys(payload).length === 0) {
+      return res.status(400).json({ error: 'No valid fields to update' });
+    }
+    const institution = await Institution.findByIdAndUpdate(
+      req.user.institution, payload, { new: true }
+    );
+    if (!institution) return res.status(404).json({ error: 'Institution not found' });
+    res.json(institution);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// DELETE /api/v1/institutions/my — staff deletes own institution
+router.delete('/my', verifyToken, async (req, res) => {
+  try {
+    if (req.user.role !== 'staff') {
+      return res.status(403).json({ error: 'Only staff can delete their institution' });
+    }
+    if (!req.user.institution) {
+      return res.status(404).json({ error: 'No institution linked to your account' });
+    }
+    await Institution.findByIdAndDelete(req.user.institution);
+    await User.findByIdAndUpdate(req.user._id, { institution: null, accountStatus: 'pending' });
+    res.json({ message: 'Institution deleted. Your account has been reset.' });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // GET /api/v1/institutions/my
 router.get('/my', verifyToken, async (req, res) => {
   try {

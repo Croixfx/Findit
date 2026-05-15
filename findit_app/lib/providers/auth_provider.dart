@@ -84,6 +84,19 @@ class FindItAuthProvider extends ChangeNotifier {
     } catch (_) {}
   }
 
+  Future<void> refreshUser() async {
+    try {
+      final json = await _apiService.post('/auth/me', {});
+      currentUser = UserModel.fromJson(json as Map<String, dynamic>);
+      if (currentUser?.role.toLowerCase() == 'staff') {
+        await _loadStaffInstitution();
+      } else {
+        institution = null;
+      }
+    } catch (_) {}
+    notifyListeners();
+  }
+
   Future<void> refreshInstitutionStatus() async {
     if (_loadingUser) return;
     _loadingUser = true;

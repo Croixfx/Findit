@@ -92,6 +92,7 @@ class ItemModel {
 
   String get firstPhoto => photos.isNotEmpty ? photos.first : '';
   bool get hasPhoto => photos.isNotEmpty;
+  bool get isTerminal => status == 'returned' || status == 'discarded';
 
   Color get statusColor {
     switch (status) {

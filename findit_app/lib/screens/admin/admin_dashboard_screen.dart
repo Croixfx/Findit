@@ -253,6 +253,190 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
     });
   }
 
+  static const _instTypes = [
+    ('university', 'University'),
+    ('hospital', 'Hospital'),
+    ('hotel', 'Hotel'),
+    ('office', 'Office'),
+    ('other', 'Other'),
+  ];
+
+  Future<void> _showCreateInstitutionDialog() async {
+    final nameCtrl = TextEditingController();
+    final emailCtrl = TextEditingController();
+    final addressCtrl = TextEditingController();
+    final phoneCtrl = TextEditingController();
+    String? selectedType;
+
+    final created = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setSt) => AlertDialog(
+          title: const Text('Add Institution'),
+          content: SingleChildScrollView(
+            child: Column(mainAxisSize: MainAxisSize.min, children: [
+              TextField(
+                controller: nameCtrl,
+                textCapitalization: TextCapitalization.words,
+                decoration: const InputDecoration(labelText: 'Name *'),
+              ),
+              const SizedBox(height: 10),
+              DropdownButtonFormField<String>(
+                value: selectedType,
+                decoration: const InputDecoration(labelText: 'Type *'),
+                items: _instTypes
+                    .map((t) => DropdownMenuItem(value: t.$1, child: Text(t.$2)))
+                    .toList(),
+                onChanged: (v) => setSt(() => selectedType = v),
+              ),
+              const SizedBox(height: 10),
+              TextField(
+                controller: addressCtrl,
+                decoration: const InputDecoration(labelText: 'Address'),
+              ),
+              const SizedBox(height: 10),
+              TextField(
+                controller: emailCtrl,
+                keyboardType: TextInputType.emailAddress,
+                decoration: const InputDecoration(labelText: 'Contact email'),
+              ),
+              const SizedBox(height: 10),
+              TextField(
+                controller: phoneCtrl,
+                keyboardType: TextInputType.phone,
+                decoration: const InputDecoration(labelText: 'Phone'),
+              ),
+            ]),
+          ),
+          actions: [
+            TextButton(
+                onPressed: () => Navigator.pop(ctx, false),
+                child: const Text('Cancel')),
+            FilledButton(
+              onPressed: () async {
+                if (nameCtrl.text.trim().isEmpty || selectedType == null) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Name and type are required')));
+                  return;
+                }
+                try {
+                  await _api.post('/admin/institutions', {
+                    'name': nameCtrl.text.trim(),
+                    'type': selectedType,
+                    if (addressCtrl.text.trim().isNotEmpty)
+                      'address': addressCtrl.text.trim(),
+                    if (emailCtrl.text.trim().isNotEmpty)
+                      'contactEmail': emailCtrl.text.trim(),
+                    if (phoneCtrl.text.trim().isNotEmpty)
+                      'phone': phoneCtrl.text.trim(),
+                  });
+                  if (!mounted) return;
+                  Navigator.pop(ctx, true);
+                } catch (e) {
+                  if (!mounted) return;
+                  ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                      content: Text(e is ApiException
+                          ? e.message
+                          : e.toString().replaceFirst('Exception: ', ''))));
+                }
+              },
+              child: const Text('Create'),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (created == true) await _load();
+  }
+
+  Future<void> _showEditInstitutionDialog(Map<String, dynamic> inst) async {
+    final id = inst['_id'] as String? ?? '';
+    if (id.isEmpty) return;
+
+    final nameCtrl = TextEditingController(text: inst['name'] as String? ?? '');
+    final emailCtrl = TextEditingController(text: inst['contactEmail'] as String? ?? '');
+    final addressCtrl = TextEditingController(text: inst['address'] as String? ?? '');
+    final phoneCtrl = TextEditingController(text: inst['phone'] as String? ?? '');
+    String? selectedType = inst['type'] as String?;
+
+    final saved = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setSt) => AlertDialog(
+          title: const Text('Edit Institution'),
+          content: SingleChildScrollView(
+            child: Column(mainAxisSize: MainAxisSize.min, children: [
+              TextField(
+                controller: nameCtrl,
+                textCapitalization: TextCapitalization.words,
+                decoration: const InputDecoration(labelText: 'Name *'),
+              ),
+              const SizedBox(height: 10),
+              DropdownButtonFormField<String>(
+                value: selectedType,
+                decoration: const InputDecoration(labelText: 'Type *'),
+                items: _instTypes
+                    .map((t) => DropdownMenuItem(value: t.$1, child: Text(t.$2)))
+                    .toList(),
+                onChanged: (v) => setSt(() => selectedType = v),
+              ),
+              const SizedBox(height: 10),
+              TextField(
+                controller: addressCtrl,
+                decoration: const InputDecoration(labelText: 'Address'),
+              ),
+              const SizedBox(height: 10),
+              TextField(
+                controller: emailCtrl,
+                keyboardType: TextInputType.emailAddress,
+                decoration: const InputDecoration(labelText: 'Contact email'),
+              ),
+              const SizedBox(height: 10),
+              TextField(
+                controller: phoneCtrl,
+                keyboardType: TextInputType.phone,
+                decoration: const InputDecoration(labelText: 'Phone'),
+              ),
+            ]),
+          ),
+          actions: [
+            TextButton(
+                onPressed: () => Navigator.pop(ctx, false),
+                child: const Text('Cancel')),
+            FilledButton(
+              onPressed: () async {
+                if (nameCtrl.text.trim().isEmpty || selectedType == null) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Name and type are required')));
+                  return;
+                }
+                try {
+                  await _api.patch('/admin/institutions/$id', {
+                    'name': nameCtrl.text.trim(),
+                    'type': selectedType,
+                    'address': addressCtrl.text.trim(),
+                    'contactEmail': emailCtrl.text.trim(),
+                    'phone': phoneCtrl.text.trim(),
+                  });
+                  if (!mounted) return;
+                  Navigator.pop(ctx, true);
+                } catch (e) {
+                  if (!mounted) return;
+                  ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                      content: Text(e is ApiException
+                          ? e.message
+                          : e.toString().replaceFirst('Exception: ', ''))));
+                }
+              },
+              child: const Text('Save'),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (saved == true) await _load();
+  }
+
   Future<void> _setInstStatus(String id, String status) async {
     await _run(() async {
       await _api.patch('/admin/institutions/$id', {'status': status});
@@ -372,7 +556,9 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                       _InstitutionsTab(
                         institutions: _institutions,
                         onSetStatus: _setInstStatus,
+                        onEdit: _showEditInstitutionDialog,
                         onDelete: _deleteInstitution,
+                        onCreate: _showCreateInstitutionDialog,
                       ),
                       _AdminItemsTab(api: _api, institutions: _institutions),
                       _AdminClaimsTab(api: _api),
@@ -659,51 +845,81 @@ class _InstitutionsTab extends StatelessWidget {
   const _InstitutionsTab({
     required this.institutions,
     required this.onSetStatus,
+    required this.onEdit,
     required this.onDelete,
+    required this.onCreate,
   });
   final List<Map<String, dynamic>> institutions;
   final Future<void> Function(String id, String status) onSetStatus;
+  final Future<void> Function(Map<String, dynamic> inst) onEdit;
   final Future<void> Function(String id, String name) onDelete;
+  final VoidCallback onCreate;
 
   @override
   Widget build(BuildContext context) {
-    if (institutions.isEmpty) return const Center(child: Text('No institutions.'));
-    return ListView.separated(
-      padding: const EdgeInsets.all(12),
-      itemCount: institutions.length,
-      separatorBuilder: (_, __) => const SizedBox(height: 8),
-      itemBuilder: (ctx, i) {
-        final inst = institutions[i];
-        final id = inst['_id'] as String? ?? '';
-        final name = inst['name'] as String? ?? 'Unnamed';
-        final type = (inst['type'] as String? ?? '').toUpperCase();
-        final status = (inst['status'] as String? ?? 'pending').toLowerCase();
-        return _ActionCard(
-          title: name,
-          subtitle: type,
-          chip: _statusChip(ctx, status),
-          actions: [
-            if (status != 'active')
-              FilledButton(
-                  onPressed: id.isEmpty ? null : () => onSetStatus(id, 'active'),
-                  child: const Text('Approve')),
-            if (status != 'pending')
-              OutlinedButton(
-                  onPressed: id.isEmpty ? null : () => onSetStatus(id, 'pending'),
-                  child: const Text('Set Pending')),
-            if (status != 'suspended')
-              OutlinedButton(
-                  onPressed: id.isEmpty ? null : () => onSetStatus(id, 'suspended'),
-                  child: const Text('Suspend')),
-            TextButton(
-              onPressed: id.isEmpty ? null : () => onDelete(id, name),
-              style: TextButton.styleFrom(
-                  foregroundColor: Theme.of(ctx).colorScheme.error),
-              child: const Text('Delete'),
+    return Column(
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(12, 12, 12, 4),
+          child: FilledButton.icon(
+            onPressed: onCreate,
+            icon: const Icon(Icons.add_rounded),
+            label: const Text('Add Institution'),
+            style: FilledButton.styleFrom(
+              minimumSize: const Size.fromHeight(44),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
             ),
-          ],
-        );
-      },
+          ),
+        ),
+        Expanded(
+          child: institutions.isEmpty
+              ? const Center(child: Text('No institutions yet.'))
+              : ListView.separated(
+                  padding: const EdgeInsets.all(12),
+                  itemCount: institutions.length,
+                  separatorBuilder: (_, __) => const SizedBox(height: 8),
+                  itemBuilder: (ctx, i) {
+                    final inst = institutions[i];
+                    final id = inst['_id'] as String? ?? '';
+                    final name = inst['name'] as String? ?? 'Unnamed';
+                    final type = (inst['type'] as String? ?? '').toUpperCase();
+                    final status = (inst['status'] as String? ?? 'pending').toLowerCase();
+                    return _ActionCard(
+                      title: name,
+                      subtitle: type,
+                      chip: _statusChip(ctx, status),
+                      actions: [
+                        OutlinedButton.icon(
+                          onPressed: id.isEmpty ? null : () => onEdit(inst),
+                          icon: const Icon(Icons.edit_rounded, size: 14),
+                          label: const Text('Edit'),
+                          style: OutlinedButton.styleFrom(
+                              padding: const EdgeInsets.symmetric(horizontal: 10)),
+                        ),
+                        if (status != 'active')
+                          FilledButton(
+                              onPressed: id.isEmpty ? null : () => onSetStatus(id, 'active'),
+                              child: const Text('Approve')),
+                        if (status != 'pending')
+                          OutlinedButton(
+                              onPressed: id.isEmpty ? null : () => onSetStatus(id, 'pending'),
+                              child: const Text('Pending')),
+                        if (status != 'suspended')
+                          OutlinedButton(
+                              onPressed: id.isEmpty ? null : () => onSetStatus(id, 'suspended'),
+                              child: const Text('Suspend')),
+                        TextButton(
+                          onPressed: id.isEmpty ? null : () => onDelete(id, name),
+                          style: TextButton.styleFrom(
+                              foregroundColor: Theme.of(ctx).colorScheme.error),
+                          child: const Text('Delete'),
+                        ),
+                      ],
+                    );
+                  },
+                ),
+        ),
+      ],
     );
   }
 }

@@ -478,15 +478,43 @@ class _ClaimActions extends StatelessWidget {
           Container(
             padding: const EdgeInsets.all(14),
             decoration: BoxDecoration(
-              color: Colors.green.shade50,
+              color: claim.ownerConfirmed ? Colors.teal.shade50 : Colors.green.shade50,
               borderRadius: BorderRadius.circular(12),
             ),
-            child: Row(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Icon(Icons.done_all_rounded, color: Colors.green),
-                const SizedBox(width: 8),
-                Text('Item returned to owner',
-                    style: TextStyle(color: Colors.green.shade800, fontWeight: FontWeight.w600)),
+                Row(
+                  children: [
+                    Icon(
+                      claim.ownerConfirmed
+                          ? Icons.verified_rounded
+                          : Icons.done_all_rounded,
+                      color: claim.ownerConfirmed ? Colors.teal : Colors.green,
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        claim.ownerConfirmed
+                            ? 'Returned & receipt confirmed by owner'
+                            : 'Item marked as returned — awaiting owner confirmation',
+                        style: TextStyle(
+                          color: claim.ownerConfirmed
+                              ? Colors.teal.shade800
+                              : Colors.green.shade800,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                if (claim.ownerConfirmed && claim.confirmedAt != null) ...[
+                  const SizedBox(height: 4),
+                  Text(
+                    'Confirmed at ${fmtDateTime(claim.confirmedAt!)}',
+                    style: TextStyle(color: Colors.teal.shade700, fontSize: 12),
+                  ),
+                ],
               ],
             ),
           ),
@@ -523,9 +551,54 @@ class _ItemActions extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final statuses = ['available', 'returned', 'discarded']
-        .where((s) => s != item.status)
-        .toList();
+    // Terminal states are locked — no manual changes allowed
+    if (item.isTerminal) {
+      final isReturned = item.status == 'returned';
+      return Container(
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: isReturned ? Colors.green.shade50 : Colors.grey.shade100,
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Row(
+          children: [
+            Icon(
+              Icons.lock_rounded,
+              color: isReturned ? Colors.green : Colors.grey.shade600,
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                isReturned
+                    ? 'This item has been returned. Its status is final.'
+                    : 'This item has been discarded. Its status is final.',
+                style: TextStyle(
+                  color: isReturned ? Colors.green.shade800 : Colors.grey.shade700,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    // Valid manual transitions — "returned" is claim-driven only
+    final transitions = <String>[];
+    switch (item.status) {
+      case 'available':
+        transitions.add('discarded');
+        break;
+      case 'claimed':
+      case 'ready_for_pickup':
+        transitions.addAll(['available', 'discarded']);
+        break;
+    }
+
+    if (transitions.isEmpty) return const SizedBox.shrink();
+
+    const colorMap = {'available': Colors.blue, 'discarded': Colors.grey};
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -535,12 +608,8 @@ class _ItemActions extends StatelessWidget {
                 .titleSmall
                 ?.copyWith(fontWeight: FontWeight.bold)),
         const SizedBox(height: 10),
-        ...statuses.map((s) {
-          final color = s == 'available'
-              ? Colors.blue
-              : s == 'returned'
-                  ? Colors.green
-                  : Colors.grey;
+        ...transitions.map((s) {
+          final color = colorMap[s] ?? Colors.grey;
           return Padding(
             padding: const EdgeInsets.only(bottom: 10),
             child: OutlinedButton(

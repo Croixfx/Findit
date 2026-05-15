@@ -169,5 +169,13 @@ class ClaimModel {
   }
 
   bool get canChat => status == 'approved' || status == 'returned';
+  bool get canSendMessage => status == 'approved';
   bool get isTerminal => status == 'returned' || status == 'rejected' || ownerConfirmed;
+  bool get isDeletableByOwner =>
+      status == 'submitted' ||
+      status == 'under_review' ||
+      status == 'rejected' ||
+      (status == 'returned' && ownerConfirmed);
+  bool get isDeletableByStaff =>
+      status == 'rejected' || (status == 'returned' && ownerConfirmed);
 }

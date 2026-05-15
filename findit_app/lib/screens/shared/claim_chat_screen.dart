@@ -9,11 +9,15 @@ import '../../utils/constants.dart';
 class ClaimChatScreen extends StatefulWidget {
   final String claimId;
   final String itemTitle;
+  final String claimStatus;
+  final bool ownerConfirmed;
 
   const ClaimChatScreen({
     super.key,
     required this.claimId,
     required this.itemTitle,
+    this.claimStatus = 'approved',
+    this.ownerConfirmed = false,
   });
 
   @override
@@ -126,6 +130,11 @@ class _ClaimChatScreenState extends State<ClaimChatScreen> {
       ),
       body: Column(
         children: [
+          _ChatStatusBanner(
+            claimStatus: widget.claimStatus,
+            ownerConfirmed: widget.ownerConfirmed,
+            cs: cs,
+          ),
           Expanded(
             child: _loading
                 ? const Center(child: CircularProgressIndicator())
@@ -152,12 +161,15 @@ class _ClaimChatScreenState extends State<ClaimChatScreen> {
                         },
                       ),
           ),
-          _ChatInput(
-            controller: _msgCtrl,
-            sending: _sending,
-            onSend: _send,
-            cs: cs,
-          ),
+          if (widget.claimStatus == 'approved')
+            _ChatInput(
+              controller: _msgCtrl,
+              sending: _sending,
+              onSend: _send,
+              cs: cs,
+            )
+          else
+            _ChatClosedBar(cs: cs),
         ],
       ),
     );
@@ -307,6 +319,114 @@ class _ChatInput extends StatelessWidget {
                     onPressed: onSend,
                     icon: const Icon(Icons.send_rounded),
                   ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// Banner shown at the top of the chat explaining the current chat state
+class _ChatStatusBanner extends StatelessWidget {
+  const _ChatStatusBanner({
+    required this.claimStatus,
+    required this.ownerConfirmed,
+    required this.cs,
+  });
+  final String claimStatus;
+  final bool ownerConfirmed;
+  final ColorScheme cs;
+
+  @override
+  Widget build(BuildContext context) {
+    if (claimStatus == 'approved') {
+      return _bar(
+        Icons.chat_bubble_rounded,
+        'Chat is active — arrange item pickup with the institution.',
+        Colors.teal.shade700,
+        Colors.teal.shade50,
+      );
+    }
+    if (claimStatus == 'returned' && ownerConfirmed) {
+      return _bar(
+        Icons.verified_rounded,
+        'Conversation closed — the item was successfully returned and confirmed.',
+        Colors.green.shade700,
+        Colors.green.shade50,
+      );
+    }
+    if (claimStatus == 'returned') {
+      return _bar(
+        Icons.inventory_rounded,
+        'Chat is read-only — waiting for your confirmation of receipt.',
+        Colors.amber.shade700,
+        Colors.amber.shade50,
+      );
+    }
+    // Fallback for other statuses (should not normally be reached via canChat logic)
+    return _bar(
+      Icons.lock_rounded,
+      'Chat is only available after your claim is approved.',
+      cs.onSurfaceVariant,
+      cs.surfaceContainerHighest,
+    );
+  }
+
+  Widget _bar(IconData icon, String text, Color fg, Color bg) {
+    return Container(
+      color: bg,
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+      child: Row(
+        children: [
+          Icon(icon, size: 16, color: fg),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(text,
+                style: TextStyle(color: fg, fontSize: 12, fontWeight: FontWeight.w500)),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// Disabled input bar shown when chat is closed
+class _ChatClosedBar extends StatelessWidget {
+  const _ChatClosedBar({required this.cs});
+  final ColorScheme cs;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: BoxDecoration(
+        color: cs.surface,
+        border: Border(top: BorderSide(color: cs.outlineVariant)),
+      ),
+      padding: EdgeInsets.only(
+        left: 12,
+        right: 12,
+        top: 10,
+        bottom: MediaQuery.of(context).viewInsets.bottom + 10,
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              decoration: BoxDecoration(
+                color: cs.surfaceContainerHighest,
+                borderRadius: BorderRadius.circular(24),
+              ),
+              child: Text(
+                'Messaging is closed',
+                style: TextStyle(color: cs.onSurfaceVariant, fontSize: 14),
+              ),
+            ),
+          ),
+          const SizedBox(width: 8),
+          IconButton.filled(
+            onPressed: null,
+            icon: const Icon(Icons.send_rounded),
           ),
         ],
       ),

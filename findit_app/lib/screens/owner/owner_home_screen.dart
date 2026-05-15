@@ -300,6 +300,41 @@ class _MyClaimsTabState extends State<_MyClaimsTab> {
     _load();
   }
 
+  Future<void> _deleteClaim(ClaimModel claim) async {
+    final isWithdrawal =
+        claim.status == 'submitted' || claim.status == 'under_review';
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(isWithdrawal ? 'Withdraw Claim' : 'Remove Claim'),
+        content: Text(isWithdrawal
+            ? 'This will withdraw your claim and the item will be available again. Continue?'
+            : 'Remove this claim from your history?'),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Cancel')),
+          FilledButton(
+            style: FilledButton.styleFrom(
+                backgroundColor: Theme.of(context).colorScheme.error),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: Text(isWithdrawal ? 'Withdraw' : 'Remove'),
+          ),
+        ],
+      ),
+    );
+    if (ok != true) return;
+    try {
+      await _api.delete('/claims/${claim.id}');
+      await _load();
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(e.toString().replaceFirst('Exception: ', ''))));
+      }
+    }
+  }
+
   Future<void> _load() async {
     setState(() {
       _loading = true;
@@ -426,9 +461,14 @@ class _MyClaimsTabState extends State<_MyClaimsTab> {
                                         builder: (_) => ClaimChatScreen(
                                           claimId: claim.id,
                                           itemTitle: claim.itemTitle ?? 'Item',
+                                          claimStatus: claim.status,
+                                          ownerConfirmed: claim.ownerConfirmed,
                                         ),
                                       ),
                                     )
+                                : null,
+                            onDelete: claim.isDeletableByOwner
+                                ? () => _deleteClaim(claim)
                                 : null,
                           );
                         },
@@ -757,10 +797,11 @@ class _InstitutionCard extends StatelessWidget {
 
 class _OwnerClaimCard extends StatelessWidget {
   const _OwnerClaimCard(
-      {required this.claim, required this.onTap, this.onChat});
+      {required this.claim, required this.onTap, this.onChat, this.onDelete});
   final ClaimModel claim;
   final VoidCallback onTap;
   final VoidCallback? onChat;
+  final VoidCallback? onDelete;
 
   @override
   Widget build(BuildContext context) {
@@ -807,6 +848,19 @@ class _OwnerClaimCard extends StatelessWidget {
                             fontSize: 11,
                             fontWeight: FontWeight.w600)),
                   ),
+                  if (onDelete != null && claim.isDeletableByOwner) ...[
+                    const SizedBox(width: 4),
+                    InkWell(
+                      borderRadius: BorderRadius.circular(16),
+                      onTap: onDelete,
+                      child: Padding(
+                        padding: const EdgeInsets.all(4),
+                        child: Icon(Icons.close_rounded,
+                            size: 16,
+                            color: cs.onSurfaceVariant),
+                      ),
+                    ),
+                  ],
                 ],
               ),
               const SizedBox(height: 8),
@@ -834,8 +888,13 @@ class _OwnerClaimCard extends StatelessWidget {
                   if (onChat != null)
                     TextButton.icon(
                       onPressed: onChat,
-                      icon: const Icon(Icons.chat_bubble_outline_rounded, size: 14),
-                      label: const Text('Chat'),
+                      icon: Icon(
+                        claim.canSendMessage
+                            ? Icons.chat_bubble_outline_rounded
+                            : Icons.history_rounded,
+                        size: 14,
+                      ),
+                      label: Text(claim.canSendMessage ? 'Chat' : 'History'),
                       style: TextButton.styleFrom(
                         visualDensity: VisualDensity.compact,
                         padding: const EdgeInsets.symmetric(horizontal: 8),

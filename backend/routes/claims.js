@@ -251,4 +251,46 @@ router.patch('/:id/confirm', verifyToken, async (req, res) => {
   }
 });
 
+// DELETE /api/v1/claims/:id — owner removes/withdraws; staff removes closed claims
+router.delete('/:id', verifyToken, async (req, res) => {
+  try {
+    const claim = await Claim.findById(req.params.id);
+    if (!claim) return res.status(404).json({ error: 'Claim not found' });
+
+    if (req.user.role === 'owner') {
+      if (claim.claimant.toString() !== req.user._id.toString()) {
+        return res.status(403).json({ error: 'You can only remove your own claims' });
+      }
+      if (claim.status === 'approved') {
+        return res.status(400).json({ error: 'You cannot remove an approved claim. Contact the institution.' });
+      }
+      if (claim.status === 'returned' && !claim.ownerConfirmed) {
+        return res.status(400).json({ error: 'Please confirm receipt before removing this claim.' });
+      }
+      // Withdrawing a submitted/under_review claim reverts item to available
+      if (['submitted', 'under_review'].includes(claim.status)) {
+        await Item.findByIdAndUpdate(claim.item, { status: 'available' });
+      }
+    } else if (req.user.role === 'staff') {
+      const item = await Item.findById(claim.item);
+      if (!item || !req.user.institution || !req.user.institution.equals(item.institution)) {
+        return res.status(403).json({ error: 'You can only remove claims for your institution' });
+      }
+      if (!['rejected', 'returned'].includes(claim.status)) {
+        return res.status(400).json({ error: 'You can only remove rejected or returned claims' });
+      }
+      if (claim.status === 'returned' && !claim.ownerConfirmed) {
+        return res.status(400).json({ error: 'Cannot remove this claim until the owner confirms receipt' });
+      }
+    } else {
+      return res.status(403).json({ error: 'Not authorized' });
+    }
+
+    await Claim.findByIdAndDelete(req.params.id);
+    res.json({ message: 'Claim removed' });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 module.exports = router;

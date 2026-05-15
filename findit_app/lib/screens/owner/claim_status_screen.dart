@@ -17,6 +17,7 @@ class _ClaimStatusScreenState extends State<ClaimStatusScreen> {
   final _api = ApiService();
   bool _loading = true;
   bool _confirming = false;
+  bool _deleting = false;
   String? _error;
   ClaimModel? _claim;
 
@@ -39,6 +40,43 @@ class _ClaimStatusScreenState extends State<ClaimStatusScreen> {
       if (mounted) setState(() => _error = e.toString().replaceFirst('Exception: ', ''));
     } finally {
       if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  Future<void> _deleteClaim() async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Remove Claim'),
+        content: Text(
+          _claim!.status == 'submitted' || _claim!.status == 'under_review'
+              ? 'This will withdraw your claim and the item will be marked available again. Continue?'
+              : 'Remove this claim from your history?',
+        ),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Cancel')),
+          FilledButton(
+            style: FilledButton.styleFrom(
+                backgroundColor: Theme.of(context).colorScheme.error),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Remove'),
+          ),
+        ],
+      ),
+    );
+    if (ok != true || !mounted) return;
+    setState(() => _deleting = true);
+    try {
+      await _api.delete('/claims/${widget.claimId}');
+      if (mounted) Navigator.pop(context, true);
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(e.toString().replaceFirst('Exception: ', ''))));
+        setState(() => _deleting = false);
+      }
     }
   }
 
@@ -89,11 +127,17 @@ class _ClaimStatusScreenState extends State<ClaimStatusScreen> {
         title: const Text('Claim Status',
             style: TextStyle(fontWeight: FontWeight.bold)),
         actions: [
+          if (_claim != null && _claim!.isDeletableByOwner)
+            IconButton(
+              icon: Icon(Icons.delete_outline_rounded, color: cs.error),
+              tooltip: 'Remove claim',
+              onPressed: _deleting ? null : _deleteClaim,
+            ),
           IconButton(
               icon: const Icon(Icons.refresh_rounded), onPressed: _load),
         ],
       ),
-      body: _loading
+      body: _loading || _deleting
           ? const Center(child: CircularProgressIndicator())
           : _error != null
               ? Center(
@@ -385,7 +429,7 @@ class _ClaimStatusScreenState extends State<ClaimStatusScreen> {
             ),
           ],
 
-          // ── Chat button ───────────────────────────────────────────────────
+          // ── Chat / history button ─────────────────────────────────────────
           if (claim.canChat) ...[
             const SizedBox(height: 24),
             FilledButton.icon(
@@ -395,12 +439,19 @@ class _ClaimStatusScreenState extends State<ClaimStatusScreen> {
                   builder: (_) => ClaimChatScreen(
                     claimId: claim.id,
                     itemTitle: claim.itemTitle ?? 'Item',
+                    claimStatus: claim.status,
+                    ownerConfirmed: claim.ownerConfirmed,
                   ),
                 ),
               ),
-              icon: const Icon(Icons.chat_bubble_outline_rounded),
-              label: const Text('Chat with Institution'),
+              icon: Icon(claim.canSendMessage
+                  ? Icons.chat_bubble_outline_rounded
+                  : Icons.history_rounded),
+              label: Text(claim.canSendMessage
+                  ? 'Chat with Institution'
+                  : 'View Chat History'),
               style: FilledButton.styleFrom(
+                backgroundColor: claim.canSendMessage ? null : Colors.grey.shade600,
                 minimumSize: const Size.fromHeight(52),
                 shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(12)),

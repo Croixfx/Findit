@@ -169,4 +169,5 @@ class ClaimModel {
   }
 
   bool get canChat => status == 'approved' || status == 'returned';
+  bool get isTerminal => status == 'returned' || status == 'rejected' || ownerConfirmed;
 }

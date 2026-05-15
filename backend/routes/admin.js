@@ -502,10 +502,14 @@ router.patch('/items/:id', verifyToken, requireAdmin, async (req, res) => {
     if (Object.keys(payload).length === 0) {
       return res.status(400).json({ error: 'No valid fields provided' });
     }
-    const item = await Item.findByIdAndUpdate(req.params.id, payload, { new: true })
-      .populate('institution', 'name type');
+    const item = await Item.findById(req.params.id);
     if (!item) return res.status(404).json({ error: 'Item not found' });
-    res.json(item);
+    if (payload.status !== undefined && ['returned', 'discarded'].includes(item.status)) {
+      return res.status(400).json({ error: `Item is already ${item.status} and its status cannot be changed.` });
+    }
+    const updated = await Item.findByIdAndUpdate(req.params.id, payload, { new: true })
+      .populate('institution', 'name type');
+    res.json(updated);
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
@@ -538,6 +542,13 @@ router.patch('/claims/:id/status', verifyToken, requireAdmin, async (req, res) =
 
     const claim = await Claim.findById(req.params.id).populate('claimant');
     if (!claim) return res.status(404).json({ error: 'Claim not found' });
+
+    if (['returned', 'rejected'].includes(claim.status)) {
+      return res.status(400).json({ error: `Claim is already ${claim.status} and cannot be modified.` });
+    }
+    if (claim.ownerConfirmed) {
+      return res.status(400).json({ error: 'Claim is closed — owner has already confirmed receipt.' });
+    }
 
     const item = await Item.findById(claim.item);
 

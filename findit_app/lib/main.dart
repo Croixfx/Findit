@@ -190,10 +190,75 @@ class _AuthGateState extends State<_AuthGate> {
               return const PendingApprovalScreen();
             }
 
-            return const RegisterScreen();
+            return _ProfileLoadError(
+              onRetry: () => context.read<FindItAuthProvider>().retryLoadUser(),
+              onSignOut: () => context.read<FindItAuthProvider>().logout(),
+            );
           },
         );
       },
+    );
+  }
+}
+
+class _ProfileLoadError extends StatelessWidget {
+  const _ProfileLoadError({required this.onRetry, required this.onSignOut});
+  final VoidCallback onRetry;
+  final VoidCallback onSignOut;
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return Scaffold(
+      body: Center(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 32),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 72,
+                height: 72,
+                decoration: BoxDecoration(
+                  color: cs.errorContainer,
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: Icon(Icons.cloud_off_rounded, size: 40, color: cs.error),
+              ),
+              const SizedBox(height: 20),
+              Text(
+                'Couldn\'t reach the server',
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                  color: cs.onSurface,
+                ),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'Check your connection and try again.',
+                style: TextStyle(color: cs.onSurfaceVariant),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 32),
+              FilledButton.icon(
+                onPressed: onRetry,
+                icon: const Icon(Icons.refresh_rounded),
+                label: const Text('Retry'),
+                style: FilledButton.styleFrom(
+                  minimumSize: const Size(160, 48),
+                ),
+              ),
+              const SizedBox(height: 12),
+              TextButton(
+                onPressed: onSignOut,
+                child: Text('Sign out', style: TextStyle(color: cs.error)),
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }

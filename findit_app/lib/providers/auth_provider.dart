@@ -14,6 +14,7 @@ class FindItAuthProvider extends ChangeNotifier {
   bool isLoading = false;
   bool initializing = true;
   bool _loadingUser = false;
+  bool loadUserFailed = false;
   String? error;
 
   Future<void> _fetchInstitutionById(String institutionId) async {
@@ -59,6 +60,7 @@ class FindItAuthProvider extends ChangeNotifier {
     try {
       final json = await _apiService.post('/auth/me', {});
       currentUser = UserModel.fromJson(json as Map<String, dynamic>);
+      loadUserFailed = false;
       if (currentUser?.role.toLowerCase() == 'staff') {
         await _loadStaffInstitution();
       } else {
@@ -68,11 +70,20 @@ class FindItAuthProvider extends ChangeNotifier {
     } catch (_) {
       currentUser = null;
       institution = null;
+      loadUserFailed = true;
     } finally {
       _loadingUser = false;
       initializing = false;
       notifyListeners();
     }
+  }
+
+  Future<void> retryLoadUser() async {
+    initializing = true;
+    loadUserFailed = false;
+    _loadingUser = false;
+    notifyListeners();
+    await tryLoadUser();
   }
 
   Future<void> _saveFcmToken() async {

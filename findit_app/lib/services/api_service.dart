@@ -40,11 +40,13 @@ class ApiService {
   }
 
   Future<dynamic> post(String endpoint, Map<String, dynamic> body) async {
-    final response = await http.post(
-      Uri.parse('$baseUrl$endpoint'),
-      headers: await getHeaders(),
-      body: jsonEncode(body),
-    );
+    final response = await http
+        .post(
+          Uri.parse('$baseUrl$endpoint'),
+          headers: await getHeaders(),
+          body: jsonEncode(body),
+        )
+        .timeout(const Duration(seconds: 12));
     return _decode(response);
   }
 
